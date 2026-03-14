@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - SWD1813</title>
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/SWD1813.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-lg navbar-fpt navbar-main mb-3">
+            <div class="container-fluid px-3 px-lg-4">
+                <a class="navbar-brand" asp-controller="Home" asp-action="Index">SWD1813</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-expanded="false" aria-label="Menu">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarContent">
+                    <ul class="navbar-nav nav-links me-auto gap-1 gap-lg-2">
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Projects" asp-action="Index">Projects</a>
+                            </li>
+                            @* View Task: Lecturer, Leader, Member (Admin không có quyền theo ma trận) *@
+                            @if (User.IsInRole("Lecturer") || User.IsInRole("LECTURER") || User.IsInRole("Leader") || User.IsInRole("LEADER") || User.IsInRole("Member") || User.IsInRole("MEMBER"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Tasks" asp-action="Index">Tasks</a>
+                                </li>
+                            }
+                            @if (User.IsInRole("Admin") || User.IsInRole("ADMIN") || User.IsInRole("Leader") || User.IsInRole("LEADER"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Groups" asp-action="Index">Groups</a>
+                                </li>
+                            }
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Srs" asp-action="Index">SRS</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Reports" asp-action="Index">Reports</a>
+                            </li>
+                        }
+                    </ul>
+                    <ul class="navbar-nav nav-user flex-row align-items-center gap-2">
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li class="nav-item">
+                                <span class="nav-user-name">@User.Identity.Name</span>
+                            </li>
+                            <li class="nav-item nav-sep" aria-hidden="true"></li>
+                            <li class="nav-item">
+                                <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline mb-0">
+                                    <button type="submit" class="nav-link nav-link-btn">Logout</button>
+                                </form>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link nav-link-login" asp-controller="Account" asp-action="Login">Đăng nhập</a>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="footer-fpt">
+        <div class="container">
+            &copy; 2026 - SWD1813 Project Management - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

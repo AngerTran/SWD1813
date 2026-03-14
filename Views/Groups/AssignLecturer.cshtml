@@ -1,0 +1,26 @@
+@{
+    ViewData["Title"] = "Assign Lecturer";
+    var group = ViewBag.Group as SWD1813.Models.Group;
+    var lecturers = ViewBag.Lecturers as IEnumerable<SWD1813.Models.Lecturer> ?? new List<SWD1813.Models.Lecturer>();
+}
+
+<h2>Assign Lecturer to @(group?.GroupName)</h2>
+<form asp-action="AssignLecturer" method="post">
+    <input type="hidden" name="id" value="@group?.GroupId" />
+    <div class="form-group mb-2">
+        <label for="lecturerId">Lecturer</label>
+        <select name="lecturerId" id="lecturerId" class="form-control" required>
+            <option value="">-- Select --</option>
+            @foreach (var l in lecturers)
+            {
+                <option value="@l.LecturerId">@(l.User?.FullName ?? l.LecturerId)</option>
+            }
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Assign</button>
+    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+</form>
+@if (!lecturers.Any())
+{
+    <p class="text-muted mt-2">No lecturers in system. Add users with role Lecturer and create Lecturer records first.</p>
+}

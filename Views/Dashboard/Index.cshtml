@@ -1,0 +1,125 @@
+@{
+    ViewData["Title"] = "Dashboard";
+    var groups = ViewBag.Groups as IEnumerable<SWD1813.Models.Group>;
+    var projects = ViewBag.Projects as IEnumerable<SWD1813.Models.Project>;
+    var selectedGroupId = ViewBag.SelectedGroupId as string;
+    var selectedProjectId = ViewBag.SelectedProjectId as string;
+}
+
+<h2 class="page-title">Dashboard</h2>
+<div class="row mb-3">
+    <div class="col-auto">
+        <label>Group</label>
+        <select id="selGroup" class="form-control" style="width:auto">
+            <option value="">-- Select --</option>
+            @if (groups != null)
+            {
+                @foreach (var g in groups)
+                {
+                    <option value="@g.GroupId" selected="@(g.GroupId == selectedGroupId)">@g.GroupName</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label>Project</label>
+        <select id="selProject" class="form-control" style="width:auto">
+            <option value="">-- Select --</option>
+            @if (projects != null)
+            {
+                @foreach (var p in projects)
+                {
+                    <option value="@p.ProjectId" selected="@(p.ProjectId == selectedProjectId)">@p.ProjectName</option>
+                }
+            }
+        </select>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card card-fpt mb-3">
+            <div class="card-header">Task Completion</div>
+            <div class="card-body">
+                <div id="taskCompletion">Select a project.</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-fpt mb-3">
+            <div class="card-header">Commit Statistics</div>
+            <div class="card-body">
+                <div id="commitStats">Select a project.</div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-12">
+        <div class="card card-fpt mb-3">
+            <div class="card-header">Member Contribution</div>
+            <div class="card-body">
+                <div id="memberContribution">Select a group.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function() {
+    function loadTaskCompletion(projectId) {
+        if (!projectId) { document.getElementById('taskCompletion').innerHTML = 'Select a project.'; return; }
+        document.getElementById('taskCompletion').innerHTML = 'Loading...';
+        fetch('/Dashboard/TaskCompletion?projectId=' + encodeURIComponent(projectId))
+            .then(r => r.json())
+            .then(function(d) {
+                document.getElementById('taskCompletion').innerHTML =
+                    '<p>Total: ' + d.total + ', Done: ' + d.done + '</p><p><strong>' + (d.percentage || 0).toFixed(1) + '%</strong> complete</p>';
+            })
+            .catch(function() { document.getElementById('taskCompletion').innerHTML = 'Error loading.'; });
+    }
+    function loadCommitStats(projectId) {
+        if (!projectId) { document.getElementById('commitStats').innerHTML = 'Select a project.'; return; }
+        document.getElementById('commitStats').innerHTML = 'Loading...';
+        fetch('/Dashboard/CommitStats?projectId=' + encodeURIComponent(projectId))
+            .then(r => r.json())
+            .then(function(d) {
+                document.getElementById('commitStats').innerHTML =
+                    '<p>Commits: ' + (d.totalCommits || 0) + '</p><p>Additions: ' + (d.totalAdditions || 0) + ', Deletions: ' + (d.totalDeletions || 0) + '</p>';
+            })
+            .catch(function() { document.getElementById('commitStats').innerHTML = 'Error loading.'; });
+    }
+    function loadMemberContribution(groupId) {
+        if (!groupId) { document.getElementById('memberContribution').innerHTML = 'Select a group.'; return; }
+        document.getElementById('memberContribution').innerHTML = 'Loading...';
+        fetch('/Dashboard/MemberContribution?groupId=' + encodeURIComponent(groupId))
+            .then(r => r.json())
+            .then(function(arr) {
+                var html = '<table class="table table-sm"><thead><tr><th>Member</th><th>Commits</th><th>Tasks Done</th><th>Note</th></tr></thead><tbody>';
+                for (var i = 0; i < (arr && arr.length); i++) {
+                    var x = arr[i];
+                    html += '<tr><td>' + (x.fullName || x.userId) + '</td><td>' + (x.totalCommits || 0) + '</td><td>' + (x.tasksDone || 0) + '</td><td>' + (x.lowContribution ? 'Low contribution' : '') + '</td></tr>';
+                }
+                html += '</tbody></table>';
+                document.getElementById('memberContribution').innerHTML = html || 'No data.';
+            })
+            .catch(function() { document.getElementById('memberContribution').innerHTML = 'Error loading.'; });
+    }
+    document.getElementById('selProject').onchange = function() {
+        var pid = this.value;
+        loadTaskCompletion(pid);
+        loadCommitStats(pid);
+    };
+    document.getElementById('selGroup').onchange = function() {
+        loadMemberContribution(this.value);
+    };
+    if (document.getElementById('selProject').value) {
+        loadTaskCompletion(document.getElementById('selProject').value);
+        loadCommitStats(document.getElementById('selProject').value);
+    }
+    if (document.getElementById('selGroup').value)
+        loadMemberContribution(document.getElementById('selGroup').value);
+})();
+</script>
+}

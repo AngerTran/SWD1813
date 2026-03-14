@@ -1,0 +1,93 @@
+@model IEnumerable<SWD1813.Models.Task>
+@{
+    ViewData["Title"] = "Tasks";
+    var projects = ViewBag.Projects as IEnumerable<SWD1813.Models.Project>;
+    var groups = ViewBag.Groups as IEnumerable<SWD1813.Models.Group>;
+    var canCreateTask = ViewBag.CanCreateTask as bool? ?? false;
+    var currentUserId = ViewBag.CurrentUserId as string;
+}
+
+<h2 class="page-title">Tasks</h2>
+@if (canCreateTask)
+{
+    <p class="mb-2"><a asp-action="Create" class="btn btn-primary">Tạo task & giao thành viên</a></p>
+}
+<form method="get" class="mb-3 row g-2">
+    <div class="col-auto">
+        <label>Group</label>
+        <select name="groupId" onchange="this.form.submit()" class="form-control" style="width:auto">
+            <option value="">-- All --</option>
+            @if (groups != null)
+            {
+                @foreach (var g in groups)
+                {
+                    <option value="@g.GroupId">@g.GroupName</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label>Project</label>
+        <select name="projectId" onchange="this.form.submit()" class="form-control" style="width:auto">
+            <option value="">-- All --</option>
+            @if (projects != null)
+            {
+                @foreach (var p in projects)
+                {
+                    <option value="@p.ProjectId">@p.ProjectName</option>
+                }
+            }
+        </select>
+    </div>
+</form>
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            <th>Key</th>
+            <th>Summary</th>
+            <th>Assignee</th>
+            <th>Status</th>
+            <th>Deadline</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var t in Model)
+        {
+            <tr>
+                <td>@(t.Issue?.IssueKey ?? "-")</td>
+                <td>@(t.Issue?.Summary ?? "-")</td>
+                <td>@(t.AssignedToNavigation?.FullName ?? "-")</td>
+                <td>@(t.Status ?? "-")</td>
+                <td>@(t.Deadline?.ToString("yyyy-MM-dd") ?? "-")</td>
+                <td>
+                    @if (canCreateTask)
+                    {
+                        <a asp-action="Assign" asp-route-id="@t.TaskId">Giao/đổi người</a>
+                        <span class="mx-1">|</span>
+                    }
+                    @* Chỉ thành viên được giao task mới đổi được trạng thái *@
+                    @if (t.AssignedTo == currentUserId && t.TaskId != null)
+                    {
+                        <form asp-action="UpdateStatus" method="post" style="display:inline">
+                            <input type="hidden" name="taskId" value="@t.TaskId" />
+                            <select name="status" onchange="this.form.submit()" class="form-control form-control-sm" style="width:auto;display:inline">
+                                <option value="To Do" selected="@(t.Status == "To Do")">To Do</option>
+                                <option value="In Progress" selected="@(t.Status == "In Progress")">In Progress</option>
+                                <option value="Done" selected="@(t.Status == "Done")">Done</option>
+                            </select>
+                        </form>
+                    }
+                    else if (t.AssignedTo != currentUserId && !string.IsNullOrEmpty(t.AssignedTo))
+                    {
+                        <span class="text-muted small">Chỉ người được giao mới đổi trạng thái</span>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+@if (!Model.Any())
+{
+    <p class="text-muted">No tasks. Sync Jira issues to create tasks.</p>
+}

@@ -1,0 +1,49 @@
+@{
+    ViewData["Title"] = "SRS - Requirements";
+    var projects = ViewBag.Projects as IEnumerable<SWD1813.Models.Project>;
+    var issues = ViewBag.Issues as IEnumerable<SWD1813.Models.JiraIssue> ?? new List<SWD1813.Models.JiraIssue>();
+    var selectedProjectId = ViewBag.SelectedProjectId as string;
+}
+
+<h2 class="page-title">SRS - Requirements from Jira</h2>
+<p class="mb-3">
+    <a asp-action="Generate" class="btn btn-primary">Tạo tài liệu SRS từ dự án</a>
+</p>
+<form method="get" class="mb-3">
+    <label>Project</label>
+    <select name="projectId" onchange="this.form.submit()" class="form-control" style="width:auto">
+        <option value="">-- Select project --</option>
+        @if (projects != null)
+        {
+            @foreach (var p in projects)
+            {
+                <option value="@p.ProjectId" selected="@(p.ProjectId == selectedProjectId)">@p.ProjectName</option>
+            }
+        }
+    </select>
+</form>
+@if (issues.Any())
+{
+    <p>Requirements (Jira issues) for SRS. Export PDF/DOCX can be added via QuestPDF or OpenXML.</p>
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr><th>Key</th><th>Summary</th><th>Type</th><th>Priority</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var i in issues)
+            {
+                <tr>
+                    <td>@i.IssueKey</td>
+                    <td>@i.Summary</td>
+                    <td>@i.IssueType</td>
+                    <td>@i.Priority</td>
+                    <td>@i.Status</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else if (!string.IsNullOrEmpty(selectedProjectId))
+{
+    <p class="text-muted">No Jira issues for this project. Sync Jira first from Project → Connect Jira.</p>
+}

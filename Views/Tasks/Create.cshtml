@@ -1,0 +1,121 @@
+@{
+    ViewData["Title"] = "Tạo task / Giao task";
+    var groups = ViewBag.Groups as IEnumerable<SWD1813.Models.Group> ?? new List<SWD1813.Models.Group>();
+    var groupsDataJson = ViewBag.GroupsDataJson as string ?? "[]";
+    var projectsDataJson = ViewBag.ProjectsDataJson as string ?? "[]";
+}
+
+<h2 class="page-title">Tạo task & giao thành viên</h2>
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<div class="card card-fpt">
+    <div class="card-body">
+        <form asp-action="Create" method="post" id="createTaskForm">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Nhóm</label>
+                    <select id="groupId" class="form-select" required>
+                        <option value="">-- Chọn nhóm --</option>
+                        @foreach (var g in groups)
+                        {
+                            <option value="@g.GroupId">@g.GroupName</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Dự án</label>
+                    <select id="projectId" class="form-select" required>
+                        <option value="">-- Chọn nhóm trước --</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Jira Issue</label>
+                    <select id="issueId" name="issueId" class="form-select" required>
+                        <option value="">-- Chọn dự án trước --</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Giao cho thành viên</label>
+                    <select id="assignedTo" name="assignedTo" class="form-select" required>
+                        <option value="">-- Chọn nhóm trước --</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Deadline</label>
+                    <input type="date" name="deadline" class="form-control" />
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Tạo task & giao</button>
+                    <a asp-action="Index" class="btn btn-secondary">Hủy</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function() {
+    const groupsData = @Html.Raw(groupsDataJson);
+    const projectsData = @Html.Raw(projectsDataJson);
+
+    const groupSelect = document.getElementById('groupId');
+    const projectSelect = document.getElementById('projectId');
+    const issueSelect = document.getElementById('issueId');
+    const memberSelect = document.getElementById('assignedTo');
+
+    function byGroup(projectId) {
+        const g = groupSelect.value;
+        projectSelect.innerHTML = '<option value="">-- Chọn dự án --</option>';
+        issueSelect.innerHTML = '<option value="">-- Chọn dự án trước --</option>';
+        if (!g) return;
+        const filtered = projectsData.filter(p => p.groupId === g);
+        filtered.forEach(p => {
+            const o = document.createElement('option');
+            o.value = p.projectId;
+            o.textContent = p.projectName || p.projectId;
+            projectSelect.appendChild(o);
+        });
+        // Members for this group
+        const gr = groupsData.find(x => x.groupId === g);
+        memberSelect.innerHTML = '<option value="">-- Chọn thành viên --</option>';
+        if (gr && gr.members) {
+            gr.members.forEach(m => {
+                const o = document.createElement('option');
+                o.value = m.userId;
+                o.textContent = m.fullName || m.userId;
+                memberSelect.appendChild(o);
+            });
+        }
+    }
+
+    groupSelect.addEventListener('change', function() {
+        byGroup();
+    });
+
+    projectSelect.addEventListener('change', function() {
+        const pid = projectSelect.value;
+        issueSelect.innerHTML = '<option value="">-- Đang tải... --</option>';
+        if (!pid) {
+            issueSelect.innerHTML = '<option value="">-- Chọn dự án trước --</option>';
+            return;
+        }
+        fetch('/Tasks/GetIssues?projectId=' + encodeURIComponent(pid))
+            .then(r => r.json())
+            .then(arr => {
+                issueSelect.innerHTML = '<option value="">-- Chọn issue --</option>';
+                arr.forEach(i => {
+                    const o = document.createElement('option');
+                    o.value = i.issueId;
+                    o.textContent = (i.issueKey || '') + ' - ' + (i.summary || i.issueId);
+                    issueSelect.appendChild(o);
+                });
+            })
+            .catch(() => { issueSelect.innerHTML = '<option value="">-- Lỗi tải --</option>'; });
+    });
+})();
+</script>
+}

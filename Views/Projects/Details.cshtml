@@ -1,0 +1,44 @@
+@model SWD1813.Models.Project
+@{
+    ViewData["Title"] = "Project Details";
+}
+
+<h2 class="page-title">@Model.ProjectName</h2>
+<div class="card card-fpt mb-3">
+    <div class="card-header" style="color: var(--fpt-blue);">Thông tin dự án</div>
+    <div class="card-body">
+        <p class="mb-1"><strong>Nhóm:</strong> @(Model.Group?.GroupName ?? "-")</p>
+        <p class="mb-1"><strong>Giảng viên phụ trách:</strong> @(Model.Group?.Lecturer?.User?.FullName ?? "Chưa gán") @if (Model.Group?.Lecturer?.User?.Email != null) { <span class="text-muted">(@Model.Group.Lecturer.User.Email)</span> }</p>
+        <p class="mb-1"><strong>Jira Project Key:</strong> @(Model.JiraProjectKey ?? "-")</p>
+        <p class="mb-0"><strong>Thời gian:</strong> @(Model.StartDate?.ToString("yyyy-MM-dd") ?? "-") → @(Model.EndDate?.ToString("yyyy-MM-dd") ?? "-")</p>
+    </div>
+</div>
+<p>
+    <a asp-action="ConnectJira" asp-route-id="@Model.ProjectId" class="btn btn-primary btn-sm">Connect Jira</a>
+    <a asp-action="ConnectGitHub" asp-route-id="@Model.ProjectId" class="btn btn-primary btn-sm">Connect GitHub</a>
+    <a asp-action="Index" class="btn btn-secondary btn-sm">Quay lại</a>
+</p>
+
+<h3 class="mt-4">Jira Issues</h3>
+<table class="table table-bordered table-striped">
+    <thead><tr><th>Key</th><th>Summary</th><th>Status</th><th>Type</th></tr></thead>
+    <tbody>
+        @foreach (var i in Model.JiraIssues ?? new List<SWD1813.Models.JiraIssue>())
+        {
+            <tr>
+                <td>@i.IssueKey</td>
+                <td>@i.Summary</td>
+                <td>@i.Status</td>
+                <td>@i.IssueType</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<h3 class="mt-4">Repositories</h3>
+<ul class="list-unstyled">
+    @foreach (var r in Model.Repositories ?? new List<SWD1813.Models.Repository>())
+    {
+        <li><a href="@r.RepoUrl" target="_blank">@r.RepoName</a> (@r.GithubOwner)</li>
+    }
+</ul>

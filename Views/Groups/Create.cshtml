@@ -1,0 +1,13 @@
+@{
+    ViewData["Title"] = "Create Group";
+}
+
+<h2>Create Group</h2>
+<form asp-action="Create" method="post">
+    <div class="form-group mb-2">
+        <label for="groupName">Group Name</label>
+        <input type="text" id="groupName" name="groupName" class="form-control" required />
+    </div>
+    <button type="submit" class="btn btn-primary">Create</button>
+    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+</form>

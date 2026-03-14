@@ -1,0 +1,12 @@
+@model SWD1813.Models.Group
+@{
+    ViewData["Title"] = "Delete Group";
+}
+
+<h2>Delete Group</h2>
+<p>Are you sure you want to delete group <strong>@Model.GroupName</strong>?</p>
+<form asp-action="Delete" method="post">
+    <input type="hidden" name="id" value="@Model.GroupId" />
+    <button type="submit" class="btn btn-danger">Delete</button>
+    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+</form>

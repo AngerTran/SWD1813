@@ -1,0 +1,15 @@
+@model SWD1813.Models.Project
+@{
+    ViewData["Title"] = "Connect GitHub";
+}
+
+<h2>Connect GitHub - @Model.ProjectName</h2>
+<form asp-action="ConnectGitHub" method="post">
+    <input type="hidden" name="projectId" value="@Model.ProjectId" />
+    <div class="form-group mb-2">
+        <label for="githubToken">GitHub Personal Access Token (for API access)</label>
+        <input type="password" id="githubToken" name="githubToken" class="form-control" placeholder="ghp_..." />
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a asp-action="Details" asp-route-id="@Model.ProjectId" class="btn btn-secondary">Cancel</a>
+</form>

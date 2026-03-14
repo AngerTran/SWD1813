@@ -1,0 +1,39 @@
+@{
+    ViewData["Title"] = "Add Member";
+    var group = ViewBag.Group as SWD1813.Models.Group;
+    var users = ViewBag.Users as IEnumerable<SWD1813.Models.User> ?? new List<SWD1813.Models.User>();
+}
+
+<h2>Add Member to @(group?.GroupName)</h2>
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+<form asp-action="AddMember" method="post">
+    <input type="hidden" name="id" value="@group?.GroupId" />
+    <div class="form-group mb-2">
+        <label for="userId">User</label>
+        <select name="userId" id="userId" class="form-control" required>
+            <option value="">-- Select --</option>
+            @foreach (var u in users)
+            {
+                <option value="@u.UserId">@u.FullName (@u.Email)</option>
+            }
+        </select>
+    </div>
+    <div class="form-group mb-2">
+        <label>Role</label>
+        <div>
+            <input type="radio" name="role" value="Leader" id="rLeader" />
+            <label for="rLeader">Leader</label>
+            <input type="radio" name="role" value="Member" id="rMember" checked />
+            <label for="rMember">Member</label>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Add</button>
+    <a asp-action="Details" asp-route-id="@group?.GroupId" class="btn btn-secondary">Cancel</a>
+</form>
+@if (!users.Any())
+{
+    <p class="text-muted mt-2">No users available (all may already be in a group).</p>
+}

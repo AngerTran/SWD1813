@@ -1,0 +1,27 @@
+@{
+    ViewData["Title"] = "Assign Task";
+    var task = ViewBag.Task as SWD1813.Models.Task;
+    var members = ViewBag.Members as IEnumerable<SWD1813.Models.GroupMember> ?? new List<SWD1813.Models.GroupMember>();
+}
+
+<h2>Assign Task</h2>
+<p><strong>@(task?.Issue?.IssueKey):</strong> @(task?.Issue?.Summary)</p>
+<form asp-action="Assign" method="post">
+    <input type="hidden" name="taskId" value="@task?.TaskId" />
+    <div class="form-group mb-2">
+        <label for="userId">Assign to</label>
+        <select name="userId" id="userId" class="form-control" required>
+            <option value="">-- Select --</option>
+            @foreach (var m in members)
+            {
+                <option value="@m.UserId" selected="@(task?.AssignedTo == m.UserId)">@(m.User?.FullName ?? m.UserId)</option>
+            }
+        </select>
+    </div>
+    <div class="form-group mb-2">
+        <label for="deadline">Deadline</label>
+        <input type="date" id="deadline" name="deadline" class="form-control" value="@(task?.Deadline?.ToString("yyyy-MM-dd"))" />
+    </div>
+    <button type="submit" class="btn btn-primary">Assign</button>
+    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+</form>

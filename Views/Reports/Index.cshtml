@@ -1,0 +1,40 @@
+@model IEnumerable<SWD1813.Models.Report>
+@{
+    ViewData["Title"] = "Reports";
+    var projects = ViewBag.Projects as IEnumerable<SWD1813.Models.Project>;
+}
+
+<h2 class="page-title">Reports</h2>
+<form method="get" class="mb-3">
+    <label>Project</label>
+    <select name="projectId" onchange="this.form.submit()" class="form-control" style="width:auto">
+        <option value="">-- All --</option>
+        @if (projects != null)
+        {
+            @foreach (var p in projects)
+            {
+                <option value="@p.ProjectId">@p.ProjectName</option>
+            }
+        }
+    </select>
+</form>
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr><th>Type</th><th>Project</th><th>Generated</th><th>File</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var r in Model)
+        {
+            <tr>
+                <td>@r.ReportType</td>
+                <td>@(r.Project?.ProjectName ?? "-")</td>
+                <td>@(r.GeneratedAt?.ToString("yyyy-MM-dd HH:mm"))</td>
+                <td>@if (!string.IsNullOrEmpty(r.FileUrl)) { <a href="@r.FileUrl" target="_blank">Download</a> } else { <span>-</span> }</td>
+            </tr>
+        }
+    </tbody>
+</table>
+@if (!Model.Any())
+{
+    <p class="text-muted">No reports yet. Generate from Project details or SRS.</p>
+}

@@ -1,0 +1,48 @@
+@model SWD1813.Models.Group
+@{
+    ViewData["Title"] = "Group Details";
+}
+
+<h2 class="page-title">@Model.GroupName</h2>
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+<div class="card card-fpt mb-3">
+    <div class="card-header" style="color: var(--fpt-blue);">Giảng viên phụ trách</div>
+    <div class="card-body">
+        <p class="mb-0"><strong>Họ tên:</strong> @(Model.Lecturer?.User?.FullName ?? "Chưa gán")</p>
+        @if (Model.Lecturer?.User != null)
+        {
+            <p class="mb-0 mt-1"><strong>Email:</strong> @(Model.Lecturer.User.Email ?? "-")</p>
+        }
+    </div>
+</div>
+@if (User.IsInRole("Admin") || User.IsInRole("ADMIN"))
+{
+    <p><a asp-action="AssignLecturer" asp-route-id="@Model.GroupId" class="btn btn-primary btn-sm">Gán giảng viên</a></p>
+}
+<p><a asp-action="AddMember" asp-route-id="@Model.GroupId" class="btn btn-primary btn-sm">Thêm thành viên</a> <a asp-action="Index" class="btn btn-secondary btn-sm">Quay lại</a></p>
+
+<h3>Members</h3>
+<table class="table table-bordered">
+    <thead>
+        <tr><th>Name</th><th>Role</th><th></th></tr>
+    </thead>
+    <tbody>
+        @foreach (var m in Model.GroupMembers ?? new List<SWD1813.Models.GroupMember>())
+        {
+            <tr>
+                <td>@(m.User?.FullName ?? m.UserId)</td>
+                <td>@m.Role</td>
+                <td>
+                    <form asp-action="RemoveMember" method="post" style="display:inline">
+                        <input type="hidden" name="groupId" value="@Model.GroupId" />
+                        <input type="hidden" name="userId" value="@m.UserId" />
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

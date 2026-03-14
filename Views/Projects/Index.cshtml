@@ -1,0 +1,50 @@
+@model IEnumerable<SWD1813.Models.Project>
+@{
+    ViewData["Title"] = "Projects";
+    var groups = ViewBag.Groups as IEnumerable<SWD1813.Models.Group>;
+    var selectedGroupId = ViewBag.SelectedGroupId as string;
+}
+
+<h2 class="page-title">Projects</h2>
+<form method="get" class="mb-3">
+    <label>Group</label>
+    <select name="groupId" onchange="this.form.submit()" class="form-control form-control-inline" style="width:auto">
+        <option value="">-- All --</option>
+        @if (groups != null)
+        {
+            @foreach (var g in groups)
+            {
+                <option value="@g.GroupId" selected="@(g.GroupId == selectedGroupId)">@g.GroupName</option>
+            }
+        }
+    </select>
+</form>
+<p><a asp-action="Create" class="btn btn-primary">Create Project</a></p>
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Group</th>
+            <th>Jira Key</th>
+            <th>Start - End</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var p in Model)
+        {
+            <tr>
+                <td>@p.ProjectName</td>
+                <td>@(p.Group?.GroupName ?? "-")</td>
+                <td>@(p.JiraProjectKey ?? "-")</td>
+                <td>@(p.StartDate?.ToString("yyyy-MM-dd") ?? "-") - @(p.EndDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                <td>
+                    <a asp-action="Details" asp-route-id="@p.ProjectId">Details</a> |
+                    <a asp-action="Edit" asp-route-id="@p.ProjectId">Edit</a> |
+                    <a asp-action="ConnectJira" asp-route-id="@p.ProjectId">Jira</a> |
+                    <a asp-action="ConnectGitHub" asp-route-id="@p.ProjectId">GitHub</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

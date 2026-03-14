@@ -1,0 +1,132 @@
+@{
+    ViewData["Title"] = "Home";
+    var isAuth = User.Identity?.IsAuthenticated == true;
+}
+
+<section class="py-5 mb-4">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h1 class="page-title display-5 fw-bold mb-3">Project Management</h1>
+            <p class="lead mx-auto" style="max-width: 36rem; color: var(--fpt-text-muted);">
+                Quản lý dự án phần mềm – tích hợp Jira &amp; GitHub. Theo dõi tiến độ, task, commit và báo cáo theo nhóm.
+            </p>
+        </div>
+
+        @if (isAuth)
+        {
+            <div class="row g-4 justify-content-center">
+                <div class="col-md-4">
+                    <a asp-controller="Dashboard" asp-action="Index" class="text-decoration-none text-dark">
+                        <div class="card card-fpt h-100">
+                            <div class="card-body text-center">
+                                <span class="fs-2" style="color: var(--fpt-blue);">📊</span>
+                                <h5 class="card-title mt-2" style="color: var(--fpt-blue);">Dashboard</h5>
+                                <p class="card-text small" style="color: var(--fpt-text-muted);">Xem tiến độ task, thống kê commit, đóng góp thành viên</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a asp-controller="Projects" asp-action="Index" class="text-decoration-none text-dark">
+                        <div class="card card-fpt h-100">
+                            <div class="card-body text-center">
+                                <span class="fs-2" style="color: var(--fpt-blue);">📁</span>
+                                <h5 class="card-title mt-2" style="color: var(--fpt-blue);">Projects</h5>
+                                <p class="card-text small" style="color: var(--fpt-text-muted);">Quản lý project, kết nối Jira &amp; GitHub</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                @* View Task: Lecturer, Leader, Member (Admin không có theo ma trận) *@
+                @if (User.IsInRole("Lecturer") || User.IsInRole("LECTURER") || User.IsInRole("Leader") || User.IsInRole("LEADER") || User.IsInRole("Member") || User.IsInRole("MEMBER"))
+                {
+                    <div class="col-md-4">
+                        <a asp-controller="Tasks" asp-action="Index" class="text-decoration-none text-dark">
+                            <div class="card card-fpt h-100">
+                                <div class="card-body text-center">
+                                    <span class="fs-2" style="color: var(--fpt-green);">✓</span>
+                                    <h5 class="card-title mt-2" style="color: var(--fpt-blue);">Tasks</h5>
+                                    <p class="card-text small" style="color: var(--fpt-text-muted);">Xem và phân công task từ Jira</p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                }
+                @if (User.IsInRole("Admin") || User.IsInRole("ADMIN") || User.IsInRole("Leader") || User.IsInRole("LEADER"))
+                {
+                    <div class="col-md-4">
+                        <a asp-controller="Groups" asp-action="Index" class="text-decoration-none text-dark">
+                            <div class="card card-fpt h-100">
+                                <div class="card-body text-center">
+                                    <span class="fs-2" style="color: var(--fpt-orange);">👥</span>
+                                    <h5 class="card-title mt-2" style="color: var(--fpt-blue);">Groups</h5>
+                                    <p class="card-text small" style="color: var(--fpt-text-muted);">Tạo nhóm, thêm thành viên (Leader); Admin gán giảng viên</p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                }
+                <div class="col-md-4">
+                    <a asp-controller="Srs" asp-action="Index" class="text-decoration-none text-dark">
+                        <div class="card card-fpt h-100">
+                            <div class="card-body text-center">
+                                <span class="fs-2" style="color: var(--fpt-blue);">📄</span>
+                                <h5 class="card-title mt-2" style="color: var(--fpt-blue);">SRS</h5>
+                                <p class="card-text small" style="color: var(--fpt-text-muted);">Requirements từ Jira, xuất SRS</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a asp-controller="Reports" asp-action="Index" class="text-decoration-none text-dark">
+                        <div class="card card-fpt h-100">
+                            <div class="card-body text-center">
+                                <span class="fs-2" style="color: var(--fpt-orange);">📑</span>
+                                <h5 class="card-title mt-2" style="color: var(--fpt-blue);">Reports</h5>
+                                <p class="card-text small" style="color: var(--fpt-text-muted);">Báo cáo tiến độ, commit</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+            <p class="text-center mt-4 mb-0">
+                <a asp-controller="Dashboard" asp-action="Index" class="btn btn-primary">Mở Dashboard</a>
+            </p>
+        }
+        else
+        {
+            <div class="row g-4 mb-5">
+                <div class="col-md-4">
+                    <div class="card card-fpt h-100">
+                        <div class="card-body">
+                            <h6 class="card-title" style="color: var(--fpt-blue);">📊 Dashboard</h6>
+                            <p class="card-text small" style="color: var(--fpt-text-muted);">Tiến độ task, thống kê commit, đóng góp theo thành viên.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-fpt h-100">
+                        <div class="card-body">
+                            <h6 class="card-title" style="color: var(--fpt-blue);">🔗 Jira &amp; GitHub</h6>
+                            <p class="card-text small" style="color: var(--fpt-text-muted);">Kết nối project, đồng bộ issues và commits.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-fpt h-100">
+                        <div class="card-body">
+                            <h6 class="card-title" style="color: var(--fpt-blue);">📑 SRS &amp; Báo cáo</h6>
+                            <p class="card-text small" style="color: var(--fpt-text-muted);">Xuất SRS từ requirements, báo cáo tiến độ.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center p-4 rounded-3 bg-light-fpt border border-2" style="border-color: var(--fpt-cloud) !important;">
+                <h5 class="mb-3" style="color: var(--fpt-blue);">Đăng nhập để sử dụng hệ thống</h5>
+                <a asp-controller="Account" asp-action="Login" class="btn btn-primary btn-lg px-4">Đăng nhập</a>
+                
+            </div>
+        }
+    </div>
+</section>
+

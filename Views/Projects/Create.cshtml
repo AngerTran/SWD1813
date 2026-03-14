@@ -1,0 +1,35 @@
+@{
+    ViewData["Title"] = "Create Project";
+    var groups = ViewBag.Groups as IEnumerable<SWD1813.Models.Group>;
+}
+
+<h2>Create Project</h2>
+<form asp-action="Create" method="post">
+    <div class="form-group mb-2">
+        <label for="projectName">Project Name</label>
+        <input type="text" id="projectName" name="projectName" class="form-control" required />
+    </div>
+    <div class="form-group mb-2">
+        <label for="groupId">Group</label>
+        <select name="groupId" id="groupId" class="form-control" required>
+            <option value="">-- Select --</option>
+            @if (groups != null)
+            {
+                @foreach (var g in groups)
+                {
+                    <option value="@g.GroupId">@g.GroupName</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="form-group mb-2">
+        <label for="startDate">Start Date</label>
+        <input type="date" id="startDate" name="startDate" class="form-control" />
+    </div>
+    <div class="form-group mb-2">
+        <label for="endDate">End Date</label>
+        <input type="date" id="endDate" name="endDate" class="form-control" />
+    </div>
+    <button type="submit" class="btn btn-primary">Create</button>
+    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+</form>

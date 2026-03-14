@@ -1,0 +1,63 @@
+@{
+    ViewData["Title"] = "Login";
+    var returnUrl = ViewData["ReturnUrl"] as string;
+    var accounts = new[]
+    {
+        new { Role = "Admin",   Email = "admin@system.com",      Password = "hash123", Name = "System Admin" },
+        new { Role = "Lecturer", Email = "lecturer@university.edu", Password = "hash123", Name = "Dr Nguyen Van A" },
+        new { Role = "Leader",  Email = "leader@student.edu",    Password = "hash123", Name = "Tran Leader" },
+        new { Role = "Member",  Email = "member@student.edu",    Password = "hash123", Name = "Nguyen Member" }
+    };
+}
+
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-6 col-md-8">
+        <div class="card card-fpt">
+            <div class="card-header">
+                <h2 class="mb-0 h5">Đăng nhập</h2>
+            </div>
+            <div class="card-body p-4">
+                <form id="loginForm" asp-action="Login" method="post" asp-route-returnUrl="@returnUrl">
+                    <div asp-validation-summary="All" class="alert alert-danger"></div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label fw-semibold" style="color: var(--fpt-blue);">Email</label>
+                        <input type="email" id="email" name="email" class="form-control form-control-lg" required autofocus placeholder="admin@system.com" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label fw-semibold" style="color: var(--fpt-blue);">Mật khẩu</label>
+                        <input type="password" id="password" name="password" class="form-control form-control-lg" required placeholder="••••••••" />
+                    </div>
+                    <div class="form-check mb-4">
+                        <input type="checkbox" id="rememberMe" name="rememberMe" class="form-check-input" value="true" />
+                        <label for="rememberMe" class="form-check-label">Ghi nhớ đăng nhập</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Đăng nhập</button>
+                </form>
+
+                <hr class="my-4" style="border-color: var(--fpt-cloud);" />
+                <p class="small fw-semibold mb-2" style="color: var(--fpt-blue);">Đăng nhập nhanh (4 role) – mật khẩu: <code>hash123</code></p>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var acc in accounts)
+                    {
+                        <button type="button" class="btn btn-outline-fpt btn-sm quick-login" data-email="@acc.Email" data-password="@acc.Password" title="@acc.Name">
+                            @acc.Role
+                        </button>
+                    }
+                </div>
+                <p class="mt-2 mb-0 small text-muted">Bấm vào role để điền sẵn email + mật khẩu, sau đó bấm Đăng nhập.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    document.querySelectorAll('.quick-login').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.getElementById('email').value = this.getAttribute('data-email');
+            document.getElementById('password').value = this.getAttribute('data-password');
+            document.getElementById('email').focus();
+        });
+    });
+</script>
+}
