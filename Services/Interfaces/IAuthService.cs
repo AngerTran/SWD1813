@@ -6,4 +6,6 @@ public interface IAuthService
 {
     System.Threading.Tasks.Task<User?> ValidateUserAsync(string email, string password);
     System.Threading.Tasks.Task EnsureSeedAdminAsync();
+    /// <summary>Đăng ký tài khoản mới. Role bắt buộc. Trả về user nếu thành công, null nếu email đã tồn tại.</summary>
+    System.Threading.Tasks.Task<(User? User, string? ErrorMessage)> RegisterAsync(RegisterViewModel model);
 }

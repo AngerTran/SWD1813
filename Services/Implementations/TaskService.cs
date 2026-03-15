@@ -91,6 +91,39 @@ public class TaskService : ITaskService
         return task;
     }
 
+    public async System.Threading.Tasks.Task<TaskEntity?> CreateManualTaskAsync(string projectId, string taskTitle, string assignedTo, DateOnly? deadline)
+    {
+        var project = await _context.Projects.FindAsync(projectId);
+        if (project == null) return null;
+        var title = (taskTitle ?? "").Trim();
+        if (string.IsNullOrEmpty(title)) return null;
+        var manualKey = "MANUAL-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var jiraIssue = new JiraIssue
+        {
+            IssueId = manualKey,
+            IssueKey = manualKey,
+            ProjectId = projectId,
+            Summary = title,
+            IssueType = "Task",
+            Status = "To Do",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _context.JiraIssues.Add(jiraIssue);
+        var task = new TaskEntity
+        {
+            TaskId = Guid.NewGuid().ToString(),
+            IssueId = manualKey,
+            AssignedTo = assignedTo,
+            Status = "To Do",
+            Deadline = deadline,
+            Progress = 0
+        };
+        _context.Tasks.Add(task);
+        await _context.SaveChangesAsync();
+        return task;
+    }
+
     public async System.Threading.Tasks.Task<bool> UpdateStatusAsync(string taskId, string status, string? currentUserId = null)
     {
         var task = await _context.Tasks.FindAsync(taskId);

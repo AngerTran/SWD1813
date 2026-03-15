@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SWD1813.Models;
 using SWD1813.Services.Interfaces;
 
 namespace SWD1813.Controllers;
@@ -15,6 +16,57 @@ public class AccountController : Controller
     public AccountController(IAuthService authService)
     {
         _authService = authService;
+    }
+
+    [HttpGet]
+    public IActionResult Register(string? returnUrl = null)
+    {
+        ViewData["ReturnUrl"] = returnUrl;
+        return View(new RegisterViewModel());
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Register(RegisterViewModel model, string? returnUrl, CancellationToken cancellationToken)
+    {
+        ViewData["ReturnUrl"] = returnUrl;
+        if (model == null)
+        {
+            ModelState.AddModelError("", "Dữ liệu đăng ký không hợp lệ.");
+            return View(new RegisterViewModel());
+        }
+        if (string.IsNullOrWhiteSpace(model.Role))
+            ModelState.AddModelError(nameof(RegisterViewModel.Role), "Vui lòng chọn vai trò (role).");
+
+        if (!ModelState.IsValid)
+            return View(model);
+
+        var (user, errorMessage) = await _authService.RegisterAsync(model);
+        if (!string.IsNullOrEmpty(errorMessage))
+        {
+            ModelState.AddModelError("", errorMessage);
+            return View(model);
+        }
+        if (user == null)
+        {
+            ModelState.AddModelError("", "Đăng ký thất bại.");
+            return View(model);
+        }
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, user.UserId),
+            new(ClaimTypes.Email, user.Email),
+            new(ClaimTypes.Name, user.FullName ?? user.Email),
+            new(ClaimTypes.Role, user.Role)
+        };
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var props = new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays(14) };
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity), props);
+
+        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return Redirect(returnUrl);
+        return RedirectToAction("Index", "Dashboard");
     }
 
     [HttpGet]

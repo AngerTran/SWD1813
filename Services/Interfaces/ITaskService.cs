@@ -13,6 +13,8 @@ public interface ITaskService
     System.Threading.Tasks.Task<bool> AssignTaskAsync(string taskId, string userId, DateOnly? deadline);
     /// <summary>Create task from Jira issue and assign to member. Returns task or null.</summary>
     System.Threading.Tasks.Task<TaskEntity?> CreateTaskAsync(string issueId, string assignedTo, DateOnly? deadline);
+    /// <summary>Tạo task ngay trên web (không cần Jira): tạo issue nội bộ MANUAL-xxx rồi tạo task.</summary>
+    System.Threading.Tasks.Task<TaskEntity?> CreateManualTaskAsync(string projectId, string taskTitle, string assignedTo, DateOnly? deadline);
     /// <summary>Update status. Only succeeds if currentUserId is the task's assignee.</summary>
     System.Threading.Tasks.Task<bool> UpdateStatusAsync(string taskId, string status, string? currentUserId = null);
 }

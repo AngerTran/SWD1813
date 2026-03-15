@@ -5,15 +5,16 @@
 }
 
 <h2>Connect Jira - @Model.ProjectName</h2>
+<p class="text-muted small">Jira site: <strong>swd-1813.atlassian.net</strong> — Project key ví dụ: <strong>KAN</strong> (từ <a href="https://swd-1813.atlassian.net/jira/software/projects/KAN/boards/1" target="_blank" rel="noopener">board của bạn</a>).</p>
 <form asp-action="ConnectJira" method="post">
     <input type="hidden" name="projectId" value="@Model.ProjectId" />
     <div class="form-group mb-2">
         <label for="jiraProjectKey">Jira Project Key</label>
-        <input type="text" id="jiraProjectKey" name="jiraProjectKey" class="form-control" value="@Model.JiraProjectKey" placeholder="e.g. SWP" />
+        <input type="text" id="jiraProjectKey" name="jiraProjectKey" class="form-control" value="@Model.JiraProjectKey" placeholder="e.g. KAN" />
     </div>
     <div class="form-group mb-2">
-        <label for="jiraToken">Jira API Token (optional, for sync)</label>
-        <input type="password" id="jiraToken" name="jiraToken" class="form-control" value="@integration?.JiraToken" placeholder="Leave blank to keep existing" />
+        <label for="jiraToken">Jira API Token (bắt buộc để đồng bộ issue)</label>
+        <input type="password" id="jiraToken" name="jiraToken" class="form-control" value="@integration?.JiraToken" placeholder="Tạo tại id.atlassian.com/manage-profile/security/api-tokens" />
     </div>
     <button type="submit" class="btn btn-primary">Save</button>
     <a asp-action="Details" asp-route-id="@Model.ProjectId" class="btn btn-secondary">Cancel</a>

@@ -1,0 +1,60 @@
+@model SWD1813.Models.RegisterViewModel
+@{
+    ViewData["Title"] = "Đăng ký";
+    var returnUrl = ViewData["ReturnUrl"] as string;
+}
+
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-6 col-md-8">
+        <div class="card card-fpt">
+            <div class="card-header">
+                <h2 class="mb-0 h5">Đăng ký tài khoản</h2>
+            </div>
+            <div class="card-body p-4">
+                <form asp-action="Register" method="post" asp-route-returnUrl="@returnUrl">
+                    <div asp-validation-summary="All" class="alert alert-danger"></div>
+                    <div class="mb-3">
+                        <label asp-for="Email" class="form-label fw-semibold" style="color: var(--fpt-blue);"></label>
+                        <input asp-for="Email" class="form-control form-control-lg" placeholder="email@example.com" autofocus />
+                        <span asp-validation-for="Email" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Password" class="form-label fw-semibold" style="color: var(--fpt-blue);"></label>
+                        <input asp-for="Password" class="form-control form-control-lg" placeholder="Tối thiểu 6 ký tự" />
+                        <span asp-validation-for="Password" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="ConfirmPassword" class="form-label fw-semibold" style="color: var(--fpt-blue);"></label>
+                        <input asp-for="ConfirmPassword" class="form-control form-control-lg" placeholder="Nhập lại mật khẩu" />
+                        <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="FullName" class="form-label fw-semibold" style="color: var(--fpt-blue);"></label>
+                        <input asp-for="FullName" class="form-control form-control-lg" placeholder="Họ và tên" />
+                        <span asp-validation-for="FullName" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-4">
+                        <label asp-for="Role" class="form-label fw-semibold" style="color: var(--fpt-blue);">Vai trò <span class="text-danger">*</span></label>
+                        <select asp-for="Role" class="form-select form-select-lg" required>
+                            <option value="">-- Chọn vai trò (bắt buộc) --</option>
+                            <option value="ADMIN">Admin</option>
+                            <option value="LECTURER">Lecturer (Giảng viên)</option>
+                            <option value="LEADER">Leader (Trưởng nhóm)</option>
+                            <option value="MEMBER">Member (Thành viên)</option>
+                        </select>
+                        <span asp-validation-for="Role" class="text-danger small"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Đăng ký</button>
+                </form>
+                <hr class="my-4" style="border-color: var(--fpt-cloud);" />
+                <p class="mb-0 text-center">
+                    Đã có tài khoản? <a asp-action="Login" asp-route-returnUrl="@returnUrl" class="fw-semibold" style="color: var(--fpt-orange);">Đăng nhập</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

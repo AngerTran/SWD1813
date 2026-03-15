@@ -93,17 +93,35 @@ public class TasksController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(string issueId, string assignedTo, DateOnly? deadline)
+    public async Task<IActionResult> Create(string? issueId, string? taskTitle, string? projectId, string assignedTo, DateOnly? deadline)
     {
         if (!CanCreateOrAssignTask) return Forbid();
-        if (string.IsNullOrEmpty(issueId) || string.IsNullOrEmpty(assignedTo))
+        if (string.IsNullOrEmpty(assignedTo))
         {
-            TempData["Error"] = "Chọn issue và thành viên.";
+            TempData["Error"] = "Chọn thành viên để giao task.";
             return RedirectToAction(nameof(Create));
         }
-        var task = await _taskService.CreateTaskAsync(issueId, assignedTo, deadline);
-        if (task == null) { TempData["Error"] = "Issue không tồn tại."; return RedirectToAction(nameof(Create)); }
-        return RedirectToAction(nameof(Index));
+        if (!string.IsNullOrWhiteSpace(issueId))
+        {
+            var task = await _taskService.CreateTaskAsync(issueId.Trim(), assignedTo, deadline);
+            if (task == null) { TempData["Error"] = "Issue không tồn tại."; return RedirectToAction(nameof(Create)); }
+            return RedirectToAction(nameof(Index));
+        }
+        if (!string.IsNullOrWhiteSpace(taskTitle) && !string.IsNullOrWhiteSpace(projectId))
+        {
+            var groupIds = await _groupService.GetGroupIdsUserParticipatesInAsync(CurrentUserId, CurrentUserRole);
+            var project = await _projectService.GetByIdAsync(projectId.Trim());
+            if (project == null || project.GroupId == null || !groupIds.Contains(project.GroupId))
+            {
+                TempData["Error"] = "Dự án không hợp lệ.";
+                return RedirectToAction(nameof(Create));
+            }
+            var task = await _taskService.CreateManualTaskAsync(projectId.Trim(), taskTitle.Trim(), assignedTo, deadline);
+            if (task == null) { TempData["Error"] = "Không tạo được task."; return RedirectToAction(nameof(Create)); }
+            return RedirectToAction(nameof(Index));
+        }
+        TempData["Error"] = "Chọn Jira Issue hoặc nhập Tên task để tạo task trực tiếp.";
+        return RedirectToAction(nameof(Create));
     }
 
     public async Task<IActionResult> Assign(string id)

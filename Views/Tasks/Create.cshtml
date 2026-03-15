@@ -13,7 +13,7 @@
 
 <div class="card card-fpt">
     <div class="card-body">
-        <form asp-action="Create" method="post" id="createTaskForm">
+        <form asp-action="Create" method="post" id="createTaskForm" asp-antiforgery="true">
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Nhóm</label>
@@ -27,14 +27,19 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Dự án</label>
-                    <select id="projectId" class="form-select" required>
+                    <select id="projectId" name="projectId" class="form-select" required>
                         <option value="">-- Chọn nhóm trước --</option>
                     </select>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Jira Issue</label>
-                    <select id="issueId" name="issueId" class="form-select" required>
-                        <option value="">-- Chọn dự án trước --</option>
+                    <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Tên task <span class="text-muted">(tạo trực tiếp trên web)</span></label>
+                    <input type="text" name="taskTitle" id="taskTitle" class="form-control" placeholder="Nhập tên task nếu không chọn Jira Issue" maxlength="500" />
+                    <p class="form-text text-muted small">Điền tên task để tạo task ngay trên web; hoặc chọn Jira Issue bên dưới nếu đã đồng bộ từ Jira.</p>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold" style="color: var(--fpt-blue);">Jira Issue <span class="text-muted">(tùy chọn)</span></label>
+                    <select id="issueId" name="issueId" class="form-select">
+                        <option value="">-- Chọn dự án trước / hoặc để trống và dùng Tên task --</option>
                     </select>
                 </div>
                 <div class="col-md-6">
@@ -70,7 +75,7 @@
     function byGroup(projectId) {
         const g = groupSelect.value;
         projectSelect.innerHTML = '<option value="">-- Chọn dự án --</option>';
-        issueSelect.innerHTML = '<option value="">-- Chọn dự án trước --</option>';
+        issueSelect.innerHTML = '<option value="">-- Chọn dự án trước / hoặc để trống và dùng Tên task --</option>';
         if (!g) return;
         const filtered = projectsData.filter(p => p.groupId === g);
         filtered.forEach(p => {
@@ -100,14 +105,14 @@
         const pid = projectSelect.value;
         issueSelect.innerHTML = '<option value="">-- Đang tải... --</option>';
         if (!pid) {
-            issueSelect.innerHTML = '<option value="">-- Chọn dự án trước --</option>';
+            issueSelect.innerHTML = '<option value="">-- Chọn dự án trước / hoặc để trống và dùng Tên task --</option>';
             return;
         }
         fetch('/Tasks/GetIssues?projectId=' + encodeURIComponent(pid))
             .then(r => r.json())
             .then(arr => {
-                issueSelect.innerHTML = '<option value="">-- Chọn issue --</option>';
-                arr.forEach(i => {
+                issueSelect.innerHTML = '<option value="">-- Chọn issue (tùy chọn) hoặc nhập Tên task --</option>';
+                (arr || []).forEach(i => {
                     const o = document.createElement('option');
                     o.value = i.issueId;
                     o.textContent = (i.issueKey || '') + ' - ' + (i.summary || i.issueId);
@@ -115,6 +120,16 @@
                 });
             })
             .catch(() => { issueSelect.innerHTML = '<option value="">-- Lỗi tải --</option>'; });
+    });
+
+    document.getElementById('createTaskForm').addEventListener('submit', function(e) {
+        const hasIssue = issueSelect.value && issueSelect.value.trim() !== '';
+        const hasTitle = document.getElementById('taskTitle').value && document.getElementById('taskTitle').value.trim() !== '';
+        if (!hasIssue && !hasTitle) {
+            e.preventDefault();
+            alert('Vui lòng nhập Tên task hoặc chọn một Jira Issue.');
+            return false;
+        }
     });
 })();
 </script>

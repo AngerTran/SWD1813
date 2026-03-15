@@ -15,9 +15,11 @@ public class AuthService : IAuthService
 
     public async System.Threading.Tasks.Task<User?> ValidateUserAsync(string email, string password)
     {
+        var emailNorm = (email ?? "").Trim();
+        if (string.IsNullOrEmpty(emailNorm)) return null;
         var user = await _context.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Email == email);
+            .FirstOrDefaultAsync(u => u.Email == emailNorm);
         if (user == null || string.IsNullOrEmpty(user.PasswordHash)) return null;
 
         // BCrypt hash bắt đầu bằng $2a$ hoặc $2b$; nếu không thì coi là mật khẩu lưu dạng thường (legacy)
@@ -49,5 +51,44 @@ public class AuthService : IAuthService
         foreach (var u in users)
             _context.Users.Add(u);
         await _context.SaveChangesAsync();
+    }
+
+    private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
+        { "Admin", "ADMIN", "Lecturer", "LECTURER", "Leader", "LEADER", "Member", "MEMBER" };
+
+    public async System.Threading.Tasks.Task<(User? User, string? ErrorMessage)> RegisterAsync(RegisterViewModel model)
+    {
+        if (model == null || string.IsNullOrWhiteSpace(model.Role))
+            return (null, "Vai trò (role) là bắt buộc.");
+
+        var roleNormalized = model.Role.Trim();
+        if (!AllowedRoles.Contains(roleNormalized))
+            return (null, "Vai trò không hợp lệ. Chọn: Admin, Lecturer, Leader hoặc Member.");
+
+        var email = model.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(email))
+            return (null, "Email là bắt buộc.");
+
+        if (await _context.Users.AnyAsync(u => u.Email == email))
+            return (null, "Email này đã được sử dụng. Vui lòng dùng email khác hoặc đăng nhập.");
+
+        var fullName = model.FullName?.Trim() ?? "";
+        if (fullName.Length > 255) fullName = fullName[..255];
+
+        var roleForDb = roleNormalized.ToUpperInvariant();
+
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(model.Password!, workFactor: 10);
+        var user = new User
+        {
+            UserId = Guid.NewGuid().ToString(),
+            Email = email,
+            PasswordHash = passwordHash,
+            FullName = fullName,
+            Role = roleForDb,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+        return (user, null);
     }
 }
