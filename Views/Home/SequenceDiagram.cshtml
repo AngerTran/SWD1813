@@ -1,0 +1,272 @@
+@{
+    ViewData["Title"] = "Sequence Diagram - SWP Tracker";
+}
+
+<div class="container py-4">
+    <h1 class="mb-4">III.1.1 Sequence Diagram</h1>
+    <p class="text-muted mb-4">Sơ đồ tuần tự cho các luồng chính của web SWP Tracker (dựa trên code: AccountController, GroupsController, ProjectsController, TasksController và các Service).</p>
+
+    <div class="accordion mb-4" id="seqAccordion">
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#seq1" aria-expanded="true">1. Login</button>
+            </h2>
+            <div id="seq1" class="accordion-collapse collapse show" data-bs-parent="#seqAccordion">
+                <div class="accordion-body">
+                    <pre class="mermaid mb-0">
+sequenceDiagram
+    actor User
+    participant Browser
+    participant AccountController
+    participant AuthService
+    participant Database
+    User->>Browser: Nhập email, password, Submit
+    Browser->>AccountController: POST /Account/Login
+    AccountController->>AuthService: ValidateUserAsync(email, password)
+    AuthService->>Database: Query User by email
+    Database-->>AuthService: User or null
+    AuthService->>AuthService: Verify password
+    AuthService-->>AccountController: User or null
+    alt Valid
+        AccountController->>AccountController: SignInAsync(Cookie)
+        AccountController-->>Browser: Redirect /Dashboard
+        Browser-->>User: Dashboard
+    else Invalid
+        AccountController-->>Browser: View Login (error)
+    end
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#seq2">2. Register</button>
+            </h2>
+            <div id="seq2" class="accordion-collapse collapse" data-bs-parent="#seqAccordion">
+                <div class="accordion-body">
+                    <pre class="mermaid mb-0">
+sequenceDiagram
+    actor User
+    participant Browser
+    participant AccountController
+    participant AuthService
+    participant Database
+    User->>Browser: Điền form (email, password, fullName, role), Submit
+    Browser->>AccountController: POST /Account/Register
+    AccountController->>AuthService: RegisterAsync(model)
+    AuthService->>Database: Check email exists?
+    alt Email chưa dùng
+        AuthService->>Database: Add User, SaveChanges
+        AuthService-->>AccountController: (user, null)
+        AccountController->>AccountController: SignInAsync
+        AccountController-->>Browser: Redirect /Dashboard
+        Browser-->>User: Dashboard
+    else Email đã tồn tại
+        AuthService-->>AccountController: (null, errorMessage)
+        AccountController-->>Browser: View Register (error)
+    end
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#seq3">3. Create Group (Admin/Leader)</button>
+            </h2>
+            <div id="seq3" class="accordion-collapse collapse" data-bs-parent="#seqAccordion">
+                <div class="accordion-body">
+                    <pre class="mermaid mb-0">
+sequenceDiagram
+    actor User
+    participant Browser
+    participant GroupsController
+    participant GroupService
+    participant Database
+    User->>Browser: Nhập tên nhóm, Submit
+    Browser->>GroupsController: POST /Groups/Create (groupName)
+    GroupsController->>GroupService: CreateAsync(groupName, createdBy)
+    GroupService->>Database: Insert Group
+    Database-->>GroupService: OK
+    GroupService-->>GroupsController: OK
+    GroupsController-->>Browser: Redirect /Groups/Index
+    Browser-->>User: Danh sách nhóm
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#seq4">4. Assign Lecturer (Admin)</button>
+            </h2>
+            <div id="seq4" class="accordion-collapse collapse" data-bs-parent="#seqAccordion">
+                <div class="accordion-body">
+                    <pre class="mermaid mb-0">
+sequenceDiagram
+    actor Admin
+    participant Browser
+    participant GroupsController
+    participant GroupService
+    participant Database
+    Admin->>Browser: Chọn lecturer, Submit
+    Browser->>GroupsController: POST /Groups/AssignLecturer (id, lecturerId)
+    GroupsController->>GroupsController: if (!IsAdmin) return Forbid()
+    GroupsController->>GroupService: AssignLecturerAsync(groupId, lecturerId)
+    GroupService->>Database: Update Group SET lecturer_id
+    Database-->>GroupService: OK
+    GroupsController-->>Browser: Redirect /Groups/Index
+    Browser-->>Admin: Danh sách nhóm
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#seq5">5. Create Project</button>
+            </h2>
+            <div id="seq5" class="accordion-collapse collapse" data-bs-parent="#seqAccordion">
+                <div class="accordion-body">
+                    <pre class="mermaid mb-0">
+sequenceDiagram
+    actor User
+    participant Browser
+    participant ProjectsController
+    participant GroupService
+    participant ProjectService
+    participant Database
+    User->>Browser: Chọn Group, nhập projectName, Submit
+    Browser->>ProjectsController: POST /Projects/Create
+    ProjectsController->>GroupService: GetUserGroupIdsAsync()
+    GroupService->>Database: Query by user role
+    Database-->>GroupService: groupIds
+    GroupService-->>ProjectsController: groupIds
+    ProjectsController->>ProjectsController: Check groupId in groupIds
+    ProjectsController->>ProjectService: CreateAsync(projectName, groupId, ...)
+    ProjectService->>Database: Insert Project
+    Database-->>ProjectService: OK
+    ProjectsController-->>Browser: Redirect /Projects/Index
+    Browser-->>User: Danh sách dự án
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#seq6">6. Create Task (Leader)</button>
+            </h2>
+            <div id="seq6" class="accordion-collapse collapse" data-bs-parent="#seqAccordion">
+                <div class="accordion-body">
+                    <pre class="mermaid mb-0">
+sequenceDiagram
+    actor Leader
+    participant Browser
+    participant TasksController
+    participant GroupService
+    participant TaskService
+    participant Database
+    Leader->>Browser: Chọn Project, taskTitle/issueId, assignedTo, Submit
+    Browser->>TasksController: POST /Tasks/Create
+    TasksController->>TasksController: if (!CanCreateOrAssignTask) return Forbid()
+    TasksController->>GroupService: GetGroupIdsUserParticipatesInAsync()
+    GroupService-->>TasksController: groupIds
+    TasksController->>TaskService: CreateManualTaskAsync or CreateTaskAsync
+    TaskService->>Database: Insert JiraIssue (if manual), Insert Task
+    Database-->>TaskService: Task
+    TaskService-->>TasksController: Task
+    TasksController-->>Browser: Redirect /Tasks/Index
+    Browser-->>Leader: Danh sách task
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#seq7">7. Update Task Status (Assignee)</button>
+            </h2>
+            <div id="seq7" class="accordion-collapse collapse" data-bs-parent="#seqAccordion">
+                <div class="accordion-body">
+                    <pre class="mermaid mb-0">
+sequenceDiagram
+    actor Member
+    participant Browser
+    participant TasksController
+    participant TaskService
+    participant Database
+    Member->>Browser: Chọn Status (e.g. Done), Submit
+    Browser->>TasksController: POST /Tasks/UpdateStatus (taskId, status)
+    TasksController->>TaskService: UpdateStatusAsync(taskId, status, currentUserId)
+    TaskService->>Database: Find Task
+    Database-->>TaskService: Task
+    TaskService->>TaskService: if (AssignedTo != currentUserId) return false
+    TaskService->>Database: Update Task.Status
+    Database-->>TaskService: OK
+    TaskService-->>TasksController: true
+    TasksController-->>Browser: Redirect /Tasks/Index
+    Browser-->>Member: Danh sách task
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#seq8">8. Connect Jira</button>
+            </h2>
+            <div id="seq8" class="accordion-collapse collapse" data-bs-parent="#seqAccordion">
+                <div class="accordion-body">
+                    <pre class="mermaid mb-0">
+sequenceDiagram
+    actor User
+    participant Browser
+    participant ProjectsController
+    participant ProjectService
+    participant Database
+    User->>Browser: Nhập Jira Project Key, Token, Submit
+    Browser->>ProjectsController: POST /Projects/ConnectJira
+    ProjectsController->>ProjectService: GetByIdAsync(projectId)
+    ProjectService->>Database: Get Project
+    Database-->>ProjectService: Project
+    ProjectsController->>ProjectsController: Check project.GroupId in groupIds
+    ProjectsController->>ProjectService: SetJiraProjectKeyAsync, SaveApiIntegrationAsync
+    ProjectService->>Database: Update Project, Upsert ApiIntegration
+    Database-->>ProjectService: OK
+    ProjectsController-->>Browser: Redirect /Projects/Details
+    Browser-->>User: Chi tiết dự án
+                    </pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">Tổng hợp luồng (theo web)</div>
+        <div class="card-body small">
+            <table class="table table-sm table-bordered mb-0">
+                <thead><tr><th>#</th><th>Luồng</th><th>Actor</th><th>Controller</th><th>Service</th></tr></thead>
+                <tbody>
+                    <tr><td>1</td><td>Login</td><td>User</td><td>AccountController</td><td>AuthService</td></tr>
+                    <tr><td>2</td><td>Register</td><td>User</td><td>AccountController</td><td>AuthService</td></tr>
+                    <tr><td>3</td><td>Create Group</td><td>Admin/Leader</td><td>GroupsController</td><td>GroupService</td></tr>
+                    <tr><td>4</td><td>Assign Lecturer</td><td>Admin</td><td>GroupsController</td><td>GroupService</td></tr>
+                    <tr><td>5</td><td>Create Project</td><td>User</td><td>ProjectsController</td><td>GroupService, ProjectService</td></tr>
+                    <tr><td>6</td><td>Create Task</td><td>Leader</td><td>TasksController</td><td>GroupService, TaskService</td></tr>
+                    <tr><td>7</td><td>Update Task Status</td><td>Assignee</td><td>TasksController</td><td>TaskService</td></tr>
+                    <tr><td>8</td><td>Connect Jira</td><td>User</td><td>ProjectsController</td><td>ProjectService</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <p class="mt-3"><a asp-action="Index" class="btn btn-secondary">← Trang chủ</a></p>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+        document.querySelectorAll('#seqAccordion .accordion-collapse').forEach(function (el) {
+            el.addEventListener('shown.bs.collapse', function () {
+                mermaid.run({ nodes: el.querySelectorAll('pre.mermaid') });
+            });
+        });
+        mermaid.run({ nodes: document.querySelectorAll('#seq1 pre.mermaid') });
+    </script>
+}
