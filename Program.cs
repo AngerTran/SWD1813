@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using SWD1813.Configuration;
 using SWD1813.Models;
 using SWD1813.Services.Implementations;
 using SWD1813.Services.Interfaces;
@@ -17,6 +18,22 @@ namespace SWD1813
             builder.Services.AddDbContext<ProjectManagementContext>(options =>
                 options.UseSqlServer(connectionString));
 
+            builder.Services.Configure<JiraIntegrationOptions>(
+                builder.Configuration.GetSection(JiraIntegrationOptions.SectionName));
+            builder.Services.Configure<GitHubIntegrationOptions>(
+                builder.Configuration.GetSection(GitHubIntegrationOptions.SectionName));
+
+            builder.Services.AddHttpClient("Jira", client =>
+            {
+                client.Timeout = TimeSpan.FromMinutes(2);
+            });
+            builder.Services.AddHttpClient("GitHub", client =>
+            {
+                client.BaseAddress = new Uri("https://api.github.com/");
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("SWD1813-Integration/1.0");
+                client.Timeout = TimeSpan.FromMinutes(2);
+            });
+
             builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(options =>
                 {
@@ -33,6 +50,7 @@ namespace SWD1813
             builder.Services.AddScoped<ITaskService, TaskService>();
             builder.Services.AddScoped<IDashboardService, DashboardService>();
             builder.Services.AddScoped<ISrsService, SrsService>();
+            builder.Services.AddScoped<IIntegrationSyncService, IntegrationSyncService>();
             builder.Services.AddHttpClient();
 
             builder.Services.AddControllersWithViews();
@@ -43,6 +61,8 @@ namespace SWD1813
             {
                 var auth = scope.ServiceProvider.GetRequiredService<IAuthService>();
                 await auth.EnsureSeedAdminAsync();
+                var db = scope.ServiceProvider.GetRequiredService<ProjectManagementContext>();
+                await SampleCommitsSeeder.EnsureAsync(db);
             }
 
             if (!app.Environment.IsDevelopment())

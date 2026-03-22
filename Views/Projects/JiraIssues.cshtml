@@ -1,0 +1,61 @@
+@model IReadOnlyList<SWD1813.Models.JiraIssue>
+@{
+    ViewData["Title"] = "Danh sách issue Jira";
+    var projectName = ViewBag.ProjectName as string ?? "";
+    var projectId = ViewBag.ProjectId as string ?? "";
+    var jiraKey = ViewBag.JiraProjectKey as string ?? "-";
+}
+
+<h2 class="page-title">Issue Jira — @projectName</h2>
+<p class="text-muted small mb-3">
+    Dự án web: <strong>@projectName</strong> · Jira Project Key: <strong>@jiraKey</strong>
+    · Dữ liệu lấy từ bảng <code>jira_issues</code> (đồng bộ bằng nút <em>Đồng bộ Jira</em> trên trang chi tiết).
+</p>
+
+<p class="mb-3">
+    <a asp-action="Details" asp-route-id="@projectId" class="btn btn-secondary btn-sm">← Quay lại chi tiết dự án</a>
+    <a asp-action="ConnectJira" asp-route-id="@projectId" class="btn btn-outline-primary btn-sm">Connect Jira</a>
+    <form asp-action="SyncJira" asp-route-id="@projectId" method="post" class="d-inline">
+        <button type="submit" class="btn btn-outline-primary btn-sm">Đồng bộ lại từ Jira</button>
+    </form>
+</p>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">
+        Chưa có issue trong hệ thống. Hãy bấm <strong>Đồng bộ Jira</strong> (cần đã Connect Jira với key + token đúng).
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped table-sm">
+            <thead class="table-light">
+                <tr>
+                    <th>Key</th>
+                    <th>Summary</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Assignee</th>
+                    <th>Cập nhật</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var i in Model)
+                {
+                    <tr>
+                        <td><code>@(i.IssueKey ?? i.IssueId)</code></td>
+                        <td>@(i.Summary ?? "-")</td>
+                        <td>@(i.IssueType ?? "-")</td>
+                        <td>@(i.Status ?? "-")</td>
+                        <td>@(i.Priority ?? "-")</td>
+                        <td>@(i.Assignee ?? "-")</td>
+                        <td>@(i.UpdatedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="text-muted small">Tổng: <strong>@Model.Count</strong> issue.</p>
+}

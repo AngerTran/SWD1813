@@ -2,11 +2,81 @@
 
 Tài liệu mô tả thiết kế hệ thống SWP Tracker (Web SWD1813): **IV.1 Integrated Communication Diagrams** và **IV.2 System High-Level Design**.
 
+**Cách xem diagram (hình vẽ):**
+- Các khối ` ```mermaid ` trong file này là **code Mermaid**. Để thấy **hình vẽ**, bạn có thể:
+  1. **Copy từng khối code** (từ `flowchart` đến hết khối) → dán vào [Mermaid Live Editor](https://mermaid.live) → xem và export PNG/SVG.
+  2. Mở file này bằng **VS Code** và cài extension **Mermaid** (Markdown Preview Mermaid Support) → xem Preview (Ctrl+Shift+V) để render diagram.
+  3. Đẩy lên **GitHub** rồi mở file .md trên web → GitHub tự render Mermaid.
+- Ảnh PNG có sẵn (nếu có): xem ở thư mục `docs/` hoặc `assets/` (file `IV1-Integrated-Communication-Diagram.png`, `IV2-System-High-Level-Design.png`).
+
 ---
 
 ## IV.1 Integrated Communication Diagrams
 
-Sơ đồ mô tả **luồng tương tác (communication)** giữa các thành phần chính: User/Browser, Controllers, Services, Database và hệ thống ngoài (Jira, GitHub). Mỗi số/label trên đường nối thể hiện thông điệp hoặc gọi hàm.
+Sơ đồ mô tả **luồng tương tác (communication)** giữa các thành phần chính: Actor, View, Controller, Services, Database và hệ thống ngoài (Jira, GitHub). Theo mẫu: actor bên trái, các bước đánh số (1, 2, 3, …) trên từng đường nối, có tiêu đề use case.
+
+**Hình IV.1 – Integrated Communication Diagram (PNG):**
+
+![IV.1 Integrated Communication Diagram](IV1-Integrated-Communication-Diagram.png)
+
+### IV.1.0 Theo mẫu – UC Configure System Integration (User/Admin)
+
+Luồng khi User/Admin cấu hình tích hợp Jira và GitHub cho dự án: mở màn hình Connect Jira / Connect GitHub, gửi thông tin, Controller xác thực và phân quyền, Service kiểm tra và lưu cấu hình, lưu DB, (có thể test kết nối) Jira API / GitHub API.
+
+```mermaid
+flowchart LR
+    Admin((Admin))
+    V[ConnectJiraView\n/ ConnectGitHubView]
+    C[ProjectsController]
+    A[AuthService]
+    R[GroupService\nAuthorize access]
+    I[ProjectService]
+    T[(ApiIntegration\n/ DB)]
+    J[Jira_API]
+    G[GitHub_API]
+
+    Admin -->|1 Open Integration Settings| V
+    V -->|2 Submit credentials\nprojectId, jiraProjectKey, jiraToken| C
+    C -->|3 Authenticate\nsession| A
+    C -->|4 Authorize\nproject in user groups| R
+    C -->|5 Validate and save| I
+    A -->|6 Session valid| C
+    I -->|7 Save config\nprojects, api_integrations| T
+    I -.->|8 Test connection| J
+    I -.->|9 Test connection| G
+    I -->|10 Redirect to Details| C
+    C -->|11| V
+    V -->|12| Admin
+```
+
+*Title: **UC Configure System Integration (Admin/User)** – SWP Tracker*
+
+---
+
+### IV.1.0b Theo mẫu – UC Login (Guest)
+
+```mermaid
+flowchart LR
+    Guest((Guest))
+    V[LoginView]
+    C[AccountController]
+    A[AuthService]
+    DB[(Database\nUsers)]
+
+    Guest -->|1 Open Login| V
+    V -->|2 Submit email, password| C
+    C -->|3 Authenticate| A
+    A -->|4 Query User by email| DB
+    DB -->|5 User or null| A
+    A -->|6 Verify password\nBCrypt| A
+    A -->|7 User or null| C
+    C -->|8 SignIn Cookie\nor View error| V
+    V -->|9 Redirect Dashboard\nor display error| Guest
+```
+
+*Title: **UC Login (Guest)** – SWP Tracker*
+
+---
 
 ### IV.1.1 Communication – Đăng nhập / Đăng ký
 
@@ -169,6 +239,10 @@ flowchart TB
 ## IV.2 System High-Level Design
 
 Kiến trúc tổng quan hệ thống: các tầng (layer) và thành phần chính.
+
+**Hình IV.2 – System High-Level Design (PNG):**
+
+![IV.2 System High-Level Design](../assets/IV2-System-High-Level-Design.png)
 
 ### IV.2.1 Sơ đồ High-Level Design (layers)
 

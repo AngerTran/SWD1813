@@ -1,15 +1,27 @@
 @model SWD1813.Models.Project
 @{
     ViewData["Title"] = "Connect GitHub";
+    var defaultRepo = ViewBag.DefaultRepoUrl as string;
 }
 
 <h2>Connect GitHub - @Model.ProjectName</h2>
-<form asp-action="ConnectGitHub" method="post">
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+<p class="text-muted small">Cần token có quyền đọc repo (scope <code>repo</code> nếu repo private). URL repo dùng để đồng bộ commit (VD: https://github.com/owner/repo).</p>
+<p class="alert alert-warning small py-2 mb-2"><strong>Quan trọng:</strong> Dùng ô bên dưới (dạng text) để <strong>dán token bằng Ctrl+V</strong>. Ô kiểu password thường bị trình duyệt chặn, server sẽ không nhận được token.</p>
+<form asp-action="ConnectGitHub" asp-route-id="@Model.ProjectId" method="post">
     <input type="hidden" name="projectId" value="@Model.ProjectId" />
     <div class="form-group mb-2">
-        <label for="githubToken">GitHub Personal Access Token (for API access)</label>
-        <input type="password" id="githubToken" name="githubToken" class="form-control" placeholder="ghp_..." />
+        <label for="repoUrl">Repository URL</label>
+        <input type="url" id="repoUrl" name="repoUrl" class="form-control" value="@defaultRepo" placeholder="https://github.com/owner/repo" />
+    </div>
+    <div class="form-group mb-2">
+        <label for="githubToken">GitHub Personal Access Token (dán trực tiếp)</label>
+        <input type="text" id="githubToken" name="githubToken" class="form-control font-monospace" autocomplete="off" spellcheck="false" placeholder="ghp_..." />
     </div>
     <button type="submit" class="btn btn-primary">Save</button>
     <a asp-action="Details" asp-route-id="@Model.ProjectId" class="btn btn-secondary">Cancel</a>
 </form>
+<p class="text-muted small mt-3">Sau khi <strong>Save</strong>: chi tiết dự án → <strong>Đồng bộ GitHub</strong> → <strong>Xem commit &amp; đóng góp GitHub</strong> (danh sách commit + % theo tác giả).</p>

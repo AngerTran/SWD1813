@@ -1,21 +1,26 @@
 @model SWD1813.Models.Project
 @{
     ViewData["Title"] = "Connect Jira";
-    var integration = ViewBag.Integration as SWD1813.Models.ApiIntegration;
 }
 
 <h2>Connect Jira - @Model.ProjectName</h2>
-<p class="text-muted small">Jira site: <strong>swd-1813.atlassian.net</strong> — Project key ví dụ: <strong>KAN</strong> (từ <a href="https://swd-1813.atlassian.net/jira/software/projects/KAN/boards/1" target="_blank" rel="noopener">board của bạn</a>).</p>
-<form asp-action="ConnectJira" method="post">
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+<p class="text-muted small"><strong>Không nhập email</strong> vào ô Project Key. Key là mã ngắn (VD <strong>KAN</strong>) trong URL <code>.../projects/KAN/...</code>. Email Atlassian cấu hình trong <code>appsettings.json</code> → <code>Jira:Email</code> (phải trùng tài khoản tạo API token).</p>
+<p class="text-muted small">Site: <strong>swd-1813.atlassian.net</strong> — <a href="https://swd-1813.atlassian.net/jira/software/projects/KAN/boards/1" target="_blank" rel="noopener">mở board KAN</a>.</p>
+<form asp-action="ConnectJira" asp-route-id="@Model.ProjectId" method="post">
     <input type="hidden" name="projectId" value="@Model.ProjectId" />
     <div class="form-group mb-2">
         <label for="jiraProjectKey">Jira Project Key</label>
-        <input type="text" id="jiraProjectKey" name="jiraProjectKey" class="form-control" value="@Model.JiraProjectKey" placeholder="e.g. KAN" />
+        <input type="text" id="jiraProjectKey" name="jiraProjectKey" class="form-control" value="@(Model.JiraProjectKey?.Contains('@') == true ? "" : Model.JiraProjectKey)" placeholder="VD: KAN" />
     </div>
     <div class="form-group mb-2">
-        <label for="jiraToken">Jira API Token (bắt buộc để đồng bộ issue)</label>
-        <input type="password" id="jiraToken" name="jiraToken" class="form-control" value="@integration?.JiraToken" placeholder="Tạo tại id.atlassian.com/manage-profile/security/api-tokens" />
+        <label for="jiraToken">Jira API Token (dán token mới; để trống nếu chỉ đổi project key)</label>
+        <input type="text" id="jiraToken" name="jiraToken" class="form-control font-monospace" autocomplete="off" spellcheck="false" placeholder="Dán API token từ id.atlassian.com (không hiển thị token cũ vì lý do bảo mật)" />
     </div>
     <button type="submit" class="btn btn-primary">Save</button>
     <a asp-action="Details" asp-route-id="@Model.ProjectId" class="btn btn-secondary">Cancel</a>
 </form>
+<p class="text-muted small mt-3">Sau khi <strong>Save</strong>: vào chi tiết dự án → <strong>Đồng bộ Jira</strong> → nút <strong>Xem danh sách issue Jira</strong> để mở trang danh sách đầy đủ.</p>
