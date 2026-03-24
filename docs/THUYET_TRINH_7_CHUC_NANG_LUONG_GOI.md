@@ -53,6 +53,83 @@ File trục chính:
 - Quản lý nhóm và thành viên.
 - Làm nền phân quyền cho toàn hệ thống thông qua `group_id`.
 
+### Mermaid - Class diagram (Quản lý nhóm)
+
+```mermaid
+classDiagram
+    direction LR
+    class GroupsController {
+      <<boundary>>
+      -IGroupService groupService
+      +Index()
+      +Create()
+      +Edit()
+      +Details()
+      +AddMember()
+      +RemoveMember()
+      +AssignLecturer()
+    }
+    class IGroupService {
+      <<interface>>
+      +GetAllAsync()
+      +GetByIdAsync()
+      +CreateAsync()
+      +UpdateAsync()
+      +DeleteAsync()
+      +AddMemberAsync()
+      +RemoveMemberAsync()
+      +AssignLecturerAsync()
+    }
+    class GroupService {
+      <<control>>
+      -ProjectManagementContext context
+      +GetAllAsync()
+      +CreateAsync()
+      +AddMemberAsync()
+      +RemoveMemberAsync()
+    }
+    class ProjectManagementContext {
+      <<entity>>
+      +Groups
+      +GroupMembers
+      +Users
+      +Lecturers
+    }
+    class Group { <<entity>> }
+    class GroupMember { <<entity>> }
+    class User { <<entity>> }
+    class Lecturer { <<entity>> }
+
+    GroupsController --> IGroupService : Association (DI)
+    IGroupService <|.. GroupService : Realization
+    GroupService --> ProjectManagementContext : Association
+    ProjectManagementContext "1" o-- "*" Group : Aggregation
+    Group "1" o-- "*" GroupMember : Aggregation
+    GroupMember "*" --> "1" User : Association
+    Group "*" --> "0..1" Lecturer : Association
+```
+
+### Mermaid - Sequence (thêm thành viên vào nhóm)
+
+```mermaid
+sequenceDiagram
+    actor U as Admin/Leader
+    participant V as Views/Groups/AddMember
+    participant C as GroupsController
+    participant S as IGroupService/GroupService
+    participant DB as ProjectManagementContext
+
+    U->>V: Chọn user + role, bấm Add
+    V->>C: POST /Groups/AddMember(id, userId, role)
+    C->>S: AddMemberAsync(groupId, userId, role)
+    S->>DB: Check BR5 (1 user/1 group), BR4 (leader)
+    DB-->>S: Kết quả kiểm tra
+    S->>DB: Insert group_members
+    DB-->>S: SaveChanges OK
+    S-->>C: true/false
+    C-->>U: Redirect Details / báo lỗi
+```
+
 ---
 
 ## 2) Quản lý dự án
@@ -108,7 +185,7 @@ Sau thao tác: redirect về `Projects/Details/{id}`.
 ### Ghi chú kỹ thuật
 
 - Endpoint Jira Cloud: **GET** `/rest/api/3/search/jql` (tương thích bản mới).
-- **Token:** ưu tiên token lưu trong DB (Connect Jira); nếu trống có thể dùng **`Jira:ApiToken`** qua **User Secrets** / biến môi trường `Jira__ApiToken` (không commit git) — xem `docs/JIRA_LOCAL_USER_SECRETS.md`.
+- **Token:** ưu tiên token lưu trong DB (Connect Jira); nếu trống có thể dùng `**Jira:ApiToken`** qua **User Secrets** / biến môi trường `Jira__ApiToken` (không commit git) — xem `docs/JIRA_LOCAL_USER_SECRETS.md`.
 - **Auto-sync** khi app khởi động: `IntegrationAutoSyncHostedService` (project có **Jira Project Key** + token DB **hoặc** `ApiToken` global).
 
 ---
@@ -205,7 +282,7 @@ Sau thao tác Connect: redirect về `Projects/Details/{id}`.
 - Reports Controller: `Controllers/ReportsController.cs`
 - Service: `Services/Interfaces/ISrsService.cs`, `IReportService.cs`, `IReportContentService.cs`
 - Service impl: `SrsService.cs`, `ReportService.cs`, `ReportContentService.cs`
-- View: `Views/Srs/*`, `Views/Reports/Index.cshtml`
+- View: `Views/Srs/`*, `Views/Reports/Index.cshtml`
 - ViewModel: `Models/ViewModels/ReportsIndexVm.cs`
 
 ### Luồng gọi class
@@ -253,15 +330,17 @@ Luồng:
 
 ## IV. Phân công 7 người (đề xuất)
 
-| Người | Luồng |
-|------|------|
-| 1 | Quản lý nhóm |
-| 2 | Quản lý dự án |
-| 3 | Tích hợp Jira |
-| 4 | Tích hợp GitHub |
-| 5 | Task |
-| 6 | Chat realtime |
-| 7 | SRS & Reports |
+
+| Người | Luồng           |
+| ----- | --------------- |
+| 1     | Quản lý nhóm    |
+| 2     | Quản lý dự án   |
+| 3     | Tích hợp Jira   |
+| 4     | Tích hợp GitHub |
+| 5     | Task            |
+| 6     | Chat realtime   |
+| 7     | SRS & Reports   |
+
 
 ---
 
@@ -280,3 +359,4 @@ Luồng:
 - Có đầy đủ luồng **Chat realtime** (private + public).
 - Mỗi luồng đều nêu rõ `View -> Controller -> Service -> DbContext`.
 - **Jira** và **GitHub** đã **tách controller** (`JiraController`, `GitHubController`) cho dễ thuyết trình và bảo trì; `ProjectsController` giữ CRUD + `Details` và redirect URL GET cũ.
+
