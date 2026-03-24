@@ -17,6 +17,8 @@ public partial class ProjectManagementContext : DbContext
 
     public virtual DbSet<ApiIntegration> ApiIntegrations { get; set; }
 
+    public virtual DbSet<ChatMessage> ChatMessages { get; set; }
+
     public virtual DbSet<Commit> Commits { get; set; }
 
     public virtual DbSet<ContributorStat> ContributorStats { get; set; }
@@ -73,6 +75,44 @@ public partial class ProjectManagementContext : DbContext
             entity.HasOne(d => d.Project).WithMany(p => p.ApiIntegrations)
                 .HasForeignKey(d => d.ProjectId)
                 .HasConstraintName("FK__api_integ__proje__06CD04F7");
+        });
+
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.HasKey(e => e.MessageId).HasName("PK__chat_messages");
+
+            entity.ToTable("chat_messages");
+
+            entity.Property(e => e.MessageId)
+                .HasMaxLength(36)
+                .IsUnicode(false)
+                .HasColumnName("message_id");
+            entity.Property(e => e.ProjectId)
+                .HasMaxLength(36)
+                .IsUnicode(false)
+                .HasColumnName("project_id");
+            entity.Property(e => e.UserId)
+                .HasMaxLength(36)
+                .IsUnicode(false)
+                .HasColumnName("user_id");
+            entity.Property(e => e.Content)
+                .HasMaxLength(2000)
+                .IsUnicode(true)
+                .HasColumnName("content");
+            entity.Property(e => e.SentAt)
+                .HasColumnType("datetime")
+                .HasColumnName("sent_at");
+
+            entity.HasIndex(e => e.ProjectId, "IX_chat_messages_project_id");
+            entity.HasIndex(e => e.SentAt, "IX_chat_messages_sent_at");
+
+            entity.HasOne(d => d.Project).WithMany(p => p.ChatMessages)
+                .HasForeignKey(d => d.ProjectId)
+                .HasConstraintName("FK_chat_messages_projects");
+
+            entity.HasOne(d => d.User).WithMany(p => p.ChatMessages)
+                .HasForeignKey(d => d.UserId)
+                .HasConstraintName("FK_chat_messages_users");
         });
 
         modelBuilder.Entity<Commit>(entity =>

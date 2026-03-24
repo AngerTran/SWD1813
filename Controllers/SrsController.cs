@@ -13,12 +13,15 @@ public class SrsController : Controller
     private readonly ProjectManagementContext _context;
     private readonly IGroupService _groupService;
     private readonly ISrsService _srsService;
+    private readonly IReportService _reportService;
 
-    public SrsController(ProjectManagementContext context, IGroupService groupService, ISrsService srsService)
+    public SrsController(ProjectManagementContext context, IGroupService groupService, ISrsService srsService,
+        IReportService reportService)
     {
         _context = context;
         _groupService = groupService;
         _srsService = srsService;
+        _reportService = reportService;
     }
 
     private string? CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -65,13 +68,36 @@ public class SrsController : Controller
         return View("ShowSrs");
     }
 
-    /// <summary>Tải file SRS (.md) đã sinh từ dự án.</summary>
-    public async Task<IActionResult> Download(string projectId)
+    /// <summary>Ghi nhận báo cáo SRS vào danh sách Reports (không cần tải file).</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveToReportList(string projectId)
     {
+        if (string.IsNullOrWhiteSpace(projectId) || string.IsNullOrEmpty(CurrentUserId))
+            return BadRequest();
         var groupIds = await _groupService.GetGroupIdsUserParticipatesInAsync(CurrentUserId, CurrentUserRole);
         var content = await _srsService.GenerateSrsContentAsync(projectId, groupIds);
         if (content == null)
             return Forbid();
+        var viewUrl = Url.Action(nameof(Generate), "Srs", new { projectId })
+                      ?? $"/Srs/Generate?projectId={Uri.EscapeDataString(projectId)}";
+        await _reportService.RecordAsync(projectId, ReportTypes.SrsPreview, viewUrl, CurrentUserId);
+        TempData["ReportSaved"] = true;
+        return RedirectToAction(nameof(Generate), new { projectId });
+    }
+
+    /// <summary>Tải file SRS (.md) đã sinh từ dự án.</summary>
+    public async Task<IActionResult> Download(string projectId)
+    {
+        if (string.IsNullOrEmpty(CurrentUserId))
+            return Challenge();
+        var groupIds = await _groupService.GetGroupIdsUserParticipatesInAsync(CurrentUserId, CurrentUserRole);
+        var content = await _srsService.GenerateSrsContentAsync(projectId, groupIds);
+        if (content == null)
+            return Forbid();
+        var downloadUrl = Url.Action(nameof(Download), "Srs", new { projectId })
+                          ?? $"/Srs/Download?projectId={Uri.EscapeDataString(projectId)}";
+        await _reportService.RecordAsync(projectId, ReportTypes.SrsMarkdown, downloadUrl, CurrentUserId);
         var project = await _context.Projects.FindAsync(projectId);
         var fileName = $"SRS_{project?.ProjectName?.Replace(" ", "_") ?? projectId}_{DateTime.Now:yyyyMMdd_HHmm}.md";
         var bytes = System.Text.Encoding.UTF8.GetBytes(content);

@@ -1,0 +1,137 @@
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Chat dự án — " + (ViewBag.ProjectName as string ?? "");
+    var pid = ViewBag.ProjectId as string ?? "";
+    var uid = ViewBag.CurrentUserId as string ?? "";
+    var initialJson = ViewBag.InitialMessagesJson as string ?? "[]";
+}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h2 class="page-title mb-0">Chat — @ViewBag.ProjectName</h2>
+    <a asp-controller="Projects" asp-action="Details" asp-route-id="@pid" class="btn btn-secondary btn-sm">← Chi tiết dự án</a>
+</div>
+
+<p class="text-muted small">
+    <strong>Phòng chung dự án:</strong> mọi người được phép vào dự án này đều thấy và chat cùng nhau (không phải chat riêng 1-1).
+    Tin lưu DB + realtime <strong>SignalR</strong>.
+</p>
+
+<div id="chatError" class="alert alert-danger d-none" role="alert"></div>
+<div id="chatWrap" class="border rounded shadow-sm" style="max-width: 720px; background: #f8f9fa;">
+    <div id="chatMessages" class="p-3 overflow-auto" style="height: 420px; background: #fff;">
+    </div>
+    <div class="p-2 border-top bg-white d-flex gap-2 align-items-end">
+        <textarea id="chatInput" class="form-control" rows="2" maxlength="2000" placeholder="Nhập tin nhắn… (Enter gửi, Shift+Enter xuống dòng)"></textarea>
+        <button type="button" id="chatSend" class="btn btn-primary">Gửi</button>
+    </div>
+</div>
+<p class="small text-muted mt-2 mb-0" id="chatStatus">Đang kết nối…</p>
+
+<script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@8.0.7/dist/browser/signalr.min.js" crossorigin="anonymous"></script>
+<script>
+    (function () {
+        const projectId = @Html.Raw(JsonSerializer.Serialize(pid));
+        const currentUserId = @Html.Raw(JsonSerializer.Serialize(uid));
+        let initial = [];
+        try { initial = @Html.Raw(initialJson); } catch (e) { initial = []; }
+
+        const box = document.getElementById('chatMessages');
+        const input = document.getElementById('chatInput');
+        const btn = document.getElementById('chatSend');
+        const errEl = document.getElementById('chatError');
+        const statusEl = document.getElementById('chatStatus');
+
+        function showErr(msg) {
+            errEl.textContent = msg;
+            errEl.classList.remove('d-none');
+        }
+        function hideErr() {
+            errEl.classList.add('d-none');
+        }
+
+        function escapeHtml(s) {
+            if (!s) return '';
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function formatTime(iso) {
+            try {
+                const d = new Date(iso);
+                return d.toLocaleString();
+            } catch { return iso; }
+        }
+
+        function appendBubble(dto, scrollBottom) {
+            const mine = dto.userId === currentUserId;
+            const row = document.createElement('div');
+            row.className = 'mb-2 ' + (mine ? 'text-end' : '');
+            row.innerHTML =
+                '<div class="d-inline-block text-start p-2 rounded ' + (mine ? 'bg-primary text-white' : 'bg-light border') + '" style="max-width:85%;white-space:pre-wrap;word-break:break-word;">' +
+                '<div class="small ' + (mine ? 'text-white-50' : 'text-muted') + '">' + escapeHtml(dto.displayName) + ' · ' + escapeHtml(formatTime(dto.sentAt)) + '</div>' +
+                '<div>' + escapeHtml(dto.content) + '</div></div>';
+            box.appendChild(row);
+            if (scrollBottom) box.scrollTop = box.scrollHeight;
+        }
+
+        initial.forEach(function (m) { appendBubble(m, false); });
+        box.scrollTop = box.scrollHeight;
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl('/hubs/projectchat')
+            .withAutomaticReconnect()
+            .build();
+
+        connection.on('ReceiveChat', function (dto) {
+            appendBubble(dto, true);
+        });
+        connection.on('ChatError', function (msg) {
+            showErr(msg);
+        });
+        connection.on('Joined', function () {
+            hideErr();
+            statusEl.textContent = 'Đã vào phòng chat.';
+        });
+
+        async function send() {
+            const text = (input.value || '').trim();
+            if (!text) return;
+            try {
+                await connection.invoke('SendChat', projectId, text);
+                input.value = '';
+            } catch (e) {
+                showErr('Gửi lỗi: ' + (e.message || e));
+            }
+        }
+
+        btn.addEventListener('click', send);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                send();
+            }
+        });
+
+        connection.start()
+            .then(function () {
+                statusEl.textContent = 'Đã kết nối. Đang tham gia phòng…';
+                return connection.invoke('JoinProjectChat', projectId);
+            })
+            .then(function () {
+                hideErr();
+            })
+            .catch(function (e) {
+                statusEl.textContent = 'Mất kết nối.';
+                showErr('Không kết nối được SignalR: ' + (e.message || e) + '. Hãy đăng nhập lại hoặc kiểm tra HTTPS/cookie.');
+            });
+
+        connection.onreconnecting(function () {
+            statusEl.textContent = 'Đang kết nối lại…';
+        });
+        connection.onreconnected(function () {
+            statusEl.textContent = 'Đã kết nối lại.';
+            connection.invoke('JoinProjectChat', projectId).catch(function () { });
+        });
+    })();
+</script>

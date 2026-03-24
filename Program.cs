@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Configuration;
 using SWD1813.Models;
+using SWD1813.Hubs;
 using SWD1813.Services.Implementations;
 using SWD1813.Services.Interfaces;
 
@@ -22,6 +23,8 @@ namespace SWD1813
                 builder.Configuration.GetSection(JiraIntegrationOptions.SectionName));
             builder.Services.Configure<GitHubIntegrationOptions>(
                 builder.Configuration.GetSection(GitHubIntegrationOptions.SectionName));
+            builder.Services.Configure<IntegrationAutoSyncOptions>(
+                builder.Configuration.GetSection(IntegrationAutoSyncOptions.SectionName));
 
             builder.Services.AddHttpClient("Jira", client =>
             {
@@ -51,8 +54,13 @@ namespace SWD1813
             builder.Services.AddScoped<IDashboardService, DashboardService>();
             builder.Services.AddScoped<ISrsService, SrsService>();
             builder.Services.AddScoped<IIntegrationSyncService, IntegrationSyncService>();
+            builder.Services.AddScoped<IChatService, ChatService>();
+            builder.Services.AddScoped<IReportService, ReportService>();
+            builder.Services.AddScoped<IReportContentService, ReportContentService>();
             builder.Services.AddHttpClient();
+            builder.Services.AddHostedService<IntegrationAutoSyncHostedService>();
 
+            builder.Services.AddSignalR();
             builder.Services.AddControllersWithViews();
 
             var app = builder.Build();
@@ -62,6 +70,7 @@ namespace SWD1813
                 var auth = scope.ServiceProvider.GetRequiredService<IAuthService>();
                 await auth.EnsureSeedAdminAsync();
                 var db = scope.ServiceProvider.GetRequiredService<ProjectManagementContext>();
+                await DatabaseSchemaEnsure.EnsureChatMessagesTableAsync(db);
                 await SampleCommitsSeeder.EnsureAsync(db);
             }
 
@@ -81,6 +90,8 @@ namespace SWD1813
                 name: "default",
                 pattern: "{controller=Home}/{action=Index}/{id?}")
                 .WithStaticAssets();
+
+            app.MapHub<ProjectChatHub>("/hubs/projectchat");
 
             await app.RunAsync();
         }

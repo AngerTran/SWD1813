@@ -5,9 +5,21 @@
     var groups = ViewBag.Groups as IEnumerable<SWD1813.Models.Group>;
     var canCreateTask = ViewBag.CanCreateTask as bool? ?? false;
     var currentUserId = ViewBag.CurrentUserId as string;
+    var qProjectId = Context.Request.Query["projectId"].ToString();
 }
 
 <h2 class="page-title">Tasks</h2>
+<div class="alert alert-light border mb-3 small">
+    <strong>Chat realtime ở đâu?</strong> Menu <a asp-controller="Chat" asp-action="Index"><strong>Chat dự án</strong></a>
+    hoặc cột <strong>Phòng chat</strong> bên dưới (mỗi dòng task → phòng của dự án đó).
+    <strong>Ai chat với ai?</strong> Một <strong>phòng chung theo dự án</strong> — mọi người được phép vào dự án đều xem và nhắn chung (SignalR), không phải tin nhắn riêng 1-1.
+</div>
+@if (!string.IsNullOrEmpty(qProjectId))
+{
+    <p class="mb-3">
+        <a asp-controller="Chat" asp-action="Project" asp-route-id="@qProjectId" class="btn btn-info btn-sm text-white">Mở chat realtime cho dự án đang lọc</a>
+    </p>
+}
 @if (canCreateTask)
 {
     <p class="mb-2"><a asp-action="Create" class="btn btn-primary">Tạo task & giao thành viên</a></p>
@@ -48,6 +60,7 @@
             <th>Assignee</th>
             <th>Status</th>
             <th>Deadline</th>
+            <th>Phòng chat</th>
             <th></th>
         </tr>
     </thead>
@@ -60,6 +73,16 @@
                 <td>@(t.AssignedToNavigation?.FullName ?? "-")</td>
                 <td>@(t.Status ?? "-")</td>
                 <td>@(t.Deadline?.ToString("yyyy-MM-dd") ?? "-")</td>
+                <td>
+                    @if (!string.IsNullOrEmpty(t.Issue?.ProjectId))
+                    {
+                        <a asp-controller="Chat" asp-action="Project" asp-route-id="@t.Issue!.ProjectId" class="btn btn-sm btn-outline-info">Chat</a>
+                    }
+                    else
+                    {
+                        <span class="text-muted">—</span>
+                    }
+                </td>
                 <td>
                     @if (canCreateTask)
                     {

@@ -1,273 +1,256 @@
-# Bài thuyết trình – 7 chức năng chính & luồng gọi class (SWD1813)
+﻿# Bài thuyết trình – 7 luồng chính (SWD1813)
 
-Tài liệu dùng cho nhóm **7 người**, **không** lấy login/logout, **không** lấy riêng “Quản lý nhóm” và “Quản lý dự án” làm chủ đề (nhưng vẫn **nhắc** khi cần: dữ liệu gắn `group_id` / `project_id`).
-
----
-
-## Kiến trúc & DI (file .cs gốc)
-
-| Vai trò | File `.cs` |
-|--------|------------|
-| Khởi động app, đăng ký DI, HttpClient, Options | `Program.cs` |
-| Cấu hình Jira/GitHub (đọc từ `appsettings.json`) | `Configuration/IntegrationOptions.cs` (`JiraIntegrationOptions`, `GitHubIntegrationOptions`) |
-| DbContext + mapping bảng | `Models/ProjectManagementContext.cs` |
-| Entity (bảng) | `Models/User.cs`, `Models/Group.cs`, `Models/GroupMember.cs`, `Models/Project.cs`, `Models/JiraIssue.cs`, `Models/Task.cs`, `Models/Repository.cs`, `Models/Commit.cs`, `Models/ContributorStat.cs`, `Models/ApiIntegration.cs`, `Models/Report.cs`, `Models/Sprint.cs`, `Models/Lecturer.cs` |
-
-**Luồng tổng quát:** `Browser` → **Razor View** (`.cshtml`) → **Controller** (`Controllers/*.cs`) → **Interface** (`Services/Interfaces/*.cs`) → **Implementation** (`Services/Implementations/*.cs`) → **`ProjectManagementContext`** → **SQL Server**.
-
-**Đăng ký DI** (trong `Program.cs`):  
-`AddDbContext<ProjectManagementContext>` · `AddScoped<IAuthService, AuthService>` · `IGroupService` · `IProjectService` · `ITaskService` · `IDashboardService` · `ISrsService` · `IIntegrationSyncService` · `AddHttpClient("Jira")` · `AddHttpClient("GitHub")` · `Configure<JiraIntegrationOptions>` · `Configure<GitHubIntegrationOptions>`.
-
-**Cập nhật thực tế code (Jira/GitHub):** Đồng bộ issue/commit **có gọi API** qua `IHttpClientFactory` trong `Services/Implementations/IntegrationSyncService.cs` (Jira: `POST rest/api/3/search`; GitHub: `GET repos/{owner}/{repo}/commits`). Lưu cấu hình vẫn qua `ProjectService` → bảng `api_integrations`, `projects`, `jira_issues`, `commits`, …
+Tài liệu này dùng để thuyết trình đúng **7 luồng chính** của hệ thống (không tính login/logout), trong đó có **Chat realtime**.
 
 ---
 
-## 1. Tích hợp Jira (cấu hình + lưu issue vào DB + đồng bộ từ Jira Cloud)
+## I. Kiến trúc tổng quát (MVC + Service)
 
-### Vai trò & file chính
+Luồng xử lý chuẩn:
 
-| Lớp | File |
-|-----|------|
-| UI | `Views/Projects/ConnectJira.cshtml`, `Views/Projects/Details.cshtml` |
-| Controller | `Controllers/ProjectsController.cs` (`ConnectJira` GET/POST, `Details`, `SyncJira` POST) |
-| Lưu key/token, query issue trong DB | `Services/Interfaces/IProjectService.cs` → `Services/Implementations/ProjectService.cs` |
-| Đồng bộ từ API Jira → `jira_issues` | `Services/Interfaces/IIntegrationSyncService.cs` → `Services/Implementations/IntegrationSyncService.cs` |
-| Phân quyền theo nhóm | `Services/Interfaces/IGroupService.cs` → `Services/Implementations/GroupService.cs` |
-| Options (BaseUrl, Email) | `Configuration/IntegrationOptions.cs` |
-| Entity | `Models/Project.cs`, `Models/ApiIntegration.cs`, `Models/JiraIssue.cs` |
-| DbContext | `Models/ProjectManagementContext.cs` |
+`View (.cshtml)` -> `Controller` -> `Service Interface` -> `Service Implementation` -> `ProjectManagementContext` -> `SQL Server`
 
-### Các file `.cs` theo thứ tự luồng (đọc từ trên xuống)
+File trục chính:
 
-1. **`Program.cs`** — đăng ký `IProjectService`, `IIntegrationSyncService`, `IHttpClientFactory` tên `"Jira"`, bind `JiraIntegrationOptions`.
-2. **`Controllers/ProjectsController.cs`** — `ConnectJira` (POST): validate key, `SetJiraProjectKeyAsync`, `SaveApiIntegrationAsync`; `SyncJira` (POST): gọi `IIntegrationSyncService.SyncJiraIssuesAsync`.
-3. **`Services/Interfaces/IProjectService.cs`** — hợp đồng: `SetJiraProjectKeyAsync`, `SaveApiIntegrationAsync`, `GetJiraIssuesByProjectAsync`, …
-4. **`Services/Implementations/ProjectService.cs`** — EF: `Projects`, `ApiIntegrations`, `JiraIssues`.
-5. **`Services/Interfaces/IIntegrationSyncService.cs`** — `SyncJiraIssuesAsync`.
-6. **`Services/Implementations/IntegrationSyncService.cs`** — HttpClient + Basic Auth (email + token), `POST rest/api/3/search`, upsert `JiraIssue`.
-7. **`Configuration/IntegrationOptions.cs`** — `Jira:BaseUrl`, `Jira:Email`.
-8. **`Models/ProjectManagementContext.cs`** — mapping bảng `projects`, `api_integrations`, `jira_issues`.
-
-### Luồng POST lưu Jira (Connect)
-
-```
-ProjectsController.ConnectJira [HttpPost]
-  → GetByIdAsync / kiểm tra nhóm (GetUserGroupIdsAsync → GroupService)
-  → IProjectService.SetJiraProjectKeyAsync
-  → IProjectService.SaveApiIntegrationAsync(projectId, jiraToken, null)
-  → ProjectService → SaveChangesAsync
-  → RedirectToAction Details
-```
-
-### Luồng đồng bộ Jira (nút “Đồng bộ Jira”)
-
-```
-ProjectsController.SyncJira [HttpPost]
-  → IIntegrationSyncService.SyncJiraIssuesAsync(projectId)
-  → IntegrationSyncService → HttpClient → Jira API → upsert jira_issues → SaveChangesAsync
-```
-
-### Luồng đọc issue cho dropdown tạo Task (AJAX)
-
-```
-Controllers/TasksController.cs — GetIssues(projectId)
-  → IGroupService + IProjectService.GetByIdAsync (authorize)
-  → IProjectService.GetJiraIssuesByProjectAsync(projectId)
-  → Json(...)
-```
-
-**File bổ sung:** `Controllers/TasksController.cs`, `Views/Tasks/Create.cshtml` (gọi `GetIssues`).
+- `Program.cs`: đăng ký DI, HttpClient, SignalR, hosted services.
+- `Models/ProjectManagementContext.cs`: DbContext + mapping entity.
+- `Services/Interfaces/*`: hợp đồng nghiệp vụ.
+- `Services/Implementations/*`: xử lý nghiệp vụ.
+- `Controllers/*`: điều phối request/response.
 
 ---
 
-## 2. Tích hợp GitHub (token + repo + commit trong DB + đồng bộ từ GitHub API)
+## II. Danh sách 7 luồng chính
 
-### Vai trò & file chính
-
-| Lớp | File |
-|-----|------|
-| UI | `Views/Projects/ConnectGitHub.cshtml`, `Views/Projects/Details.cshtml` |
-| Controller | `Controllers/ProjectsController.cs` (`ConnectGitHub`, `SyncGitHub`) |
-| Lưu token & upsert repo URL | `IProjectService.cs` → `ProjectService.cs` (`SaveApiIntegrationAsync`, `UpsertGitHubRepositoryAsync`) |
-| Parse URL GitHub | `Services/Implementations/GitHubRepoParser.cs` |
-| Đồng bộ commit | `IIntegrationSyncService.cs` → `IntegrationSyncService.cs` (`SyncGitHubCommitsAsync`) |
-| Options | `Configuration/IntegrationOptions.cs` (`GitHubIntegrationOptions`) |
-| Entity | `Models/ApiIntegration.cs`, `Models/Repository.cs`, `Models/Commit.cs`, `Models/ContributorStat.cs` |
-
-### Các file `.cs` theo thứ tự luồng
-
-1. **`Program.cs`** — `AddHttpClient("GitHub")`, `Configure<GitHubIntegrationOptions>`.
-2. **`Controllers/ProjectsController.cs`** — `ConnectGitHub` POST: `SaveApiIntegrationAsync`, `UpsertGitHubRepositoryAsync`; `SyncGitHub` POST: `SyncGitHubCommitsAsync`.
-3. **`Services/Interfaces/IProjectService.cs`** — `SaveApiIntegrationAsync`, `UpsertGitHubRepositoryAsync`.
-4. **`Services/Implementations/ProjectService.cs`** — ghi `api_integrations`, `repositories`.
-5. **`Services/Implementations/GitHubRepoParser.cs`** — tách `owner`/`repo` từ URL.
-6. **`Services/Interfaces/IIntegrationSyncService.cs`** — `SyncGitHubCommitsAsync`.
-7. **`Services/Implementations/IntegrationSyncService.cs`** — Bearer token, `GET repos/{owner}/{repo}/commits`, upsert `commits`.
-8. **`Models/ProjectManagementContext.cs`** — mapping `repositories`, `commits`, `contributor_stats`.
-
-### Luồng tóm tắt
-
-```
-ConnectGitHub POST → ProjectService (token + repo URL)
-SyncGitHub POST → IntegrationSyncService → GitHub API → bảng commits
-```
+1. **Quản lý nhóm** (Group & Member)
+2. **Quản lý dự án** (Project lifecycle)
+3. **Tích hợp Jira** (Connect + Sync issue)
+4. **Tích hợp GitHub** (Connect + Sync commit)
+5. **Task** (tạo, giao, cập nhật trạng thái)
+6. **Chat realtime** (private team + public community)
+7. **SRS & Reports** (sinh tài liệu và quản lý báo cáo)
 
 ---
 
-## 3. Task – xem & lọc (theo nhóm / dự án)
+## 1) Quản lý nhóm
 
-### Vai trò & file chính
+### File chính
 
-| Lớp | File |
-|-----|------|
-| UI | `Views/Tasks/Index.cshtml` |
-| Controller | `Controllers/TasksController.cs` — `Index`, `GetIssues` |
-| Service | `Services/Interfaces/ITaskService.cs` → `Services/Implementations/TaskService.cs` |
-| Phụ trợ | `IGroupService` / `GroupService`, `IProjectService` / `ProjectService` |
-| Entity | `Models/Task.cs`, `Models/JiraIssue.cs`, `Models/Project.cs`, `Models/User.cs` |
+- Controller: `Controllers/GroupsController.cs`
+- Service: `Services/Interfaces/IGroupService.cs`, `Services/Implementations/GroupService.cs`
+- Model: `Models/Group.cs`, `Models/GroupMember.cs`, `Models/Lecturer.cs`, `Models/User.cs`
 
-### Các file `.cs` theo thứ tự luồng
+### Luồng gọi class
 
-1. **`Controllers/TasksController.cs`** — `Index(projectId, groupId)`: gọi `GetGroupIdsUserParticipatesInAsync`, `GetAllAsync` (group/project), `GetByProjectAsync` / `GetByGroupAsync` / `GetByProjectIdsAsync`.
-2. **`Services/Interfaces/IGroupService.cs`** → **`Services/Implementations/GroupService.cs`** — nhóm user được tham gia.
-3. **`Services/Interfaces/IProjectService.cs`** → **`Services/Implementations/ProjectService.cs`** — danh sách project.
-4. **`Services/Interfaces/ITaskService.cs`** → **`Services/Implementations/TaskService.cs`** — query `Tasks` + `Include(Issue)`, `Include(AssignedToNavigation)`.
-5. **`Models/ProjectManagementContext.cs`** — quan hệ `Task` ↔ `JiraIssue` ↔ `Project`.
+`Views/Groups/*`
+-> `GroupsController` (`Index`, `Create`, `Details`, `AddMember`, `RemoveMember`, `AssignLecturer`)
+-> `IGroupService`
+-> `GroupService`
+-> `ProjectManagementContext`
 
-**Điểm nhấn:** Task gắn `IssueId`; issue có thể là Jira thật hoặc `MANUAL-*` tạo trong app.
+### Kết quả nghiệp vụ
 
----
-
-## 4. Task – tạo, giao, cập nhật trạng thái
-
-### Vai trò & file chính
-
-| Lớp | File |
-|-----|------|
-| UI | `Views/Tasks/Create.cshtml`, `Views/Tasks/Assign.cshtml`, `Views/Tasks/Index.cshtml` |
-| Controller | `Controllers/TasksController.cs` — `Create` GET/POST, `Assign` GET/POST, `UpdateStatus` POST |
-| Service | `ITaskService.cs` → `TaskService.cs`; authorize nhóm/project qua `IGroupService`, `IProjectService` |
-
-### Các file `.cs` theo thứ tự luồng
-
-1. **`Controllers/TasksController.cs`** — `CanCreateOrAssignTask` (Leader); `Create`, `Assign`, `UpdateStatus`.
-2. **`Services/Implementations/TaskService.cs`** — `CreateTaskAsync`, `CreateManualTaskAsync`, `AssignTaskAsync`, `UpdateStatusAsync` (rule: chỉ assignee đổi status khi có `currentUserId`).
-3. **`Models/Task.cs`**, **`Models/JiraIssue.cs`** — quan hệ & khóa ngoại.
-4. **`Models/ProjectManagementContext.cs`** — cấu hình FK `tasks` → `jira_issues`, `users`.
-
-### Luồng con (mapping vào cùng file trên)
-
-| Hành động | Controller method | Service method |
-|-----------|--------------------|----------------|
-| Tạo từ Jira issue | `TasksController.Create` POST | `TaskService.CreateTaskAsync` |
-| Tạo thủ công MANUAL-* | `TasksController.Create` POST | `TaskService.CreateManualTaskAsync` |
-| Giao / đổi người | `TasksController.Assign` POST | `TaskService.AssignTaskAsync` |
-| Đổi trạng thái | `TasksController.UpdateStatus` POST | `TaskService.UpdateStatusAsync` |
-
-**Quy tắc nghiệp vụ chi tiết:** xem thêm `docs/BUSINESS_RULES.md` (nếu có trong repo).
+- Quản lý nhóm và thành viên.
+- Làm nền phân quyền cho toàn hệ thống thông qua `group_id`.
 
 ---
 
-## 5. Dashboard – thống kê task, commit, đóng góp thành viên
+## 2) Quản lý dự án
 
-### Vai trò & file chính
+### File chính
 
-| Lớp | File |
-|-----|------|
-| UI | `Views/Dashboard/Index.cshtml` |
-| Controller | `Controllers/DashboardController.cs` — `Index`, `TaskCompletion`, `CommitStats`, `MemberContribution` |
-| Service | `Services/Interfaces/IDashboardService.cs` — chứa VM `DashboardTaskCompletionVm`, `DashboardCommitStatsVm`, `DashboardContributionVm` |
-| Implementation | `Services/Implementations/DashboardService.cs` |
-| Phụ trợ | `IGroupService`, `IProjectService` |
+- Controller: `Controllers/ProjectsController.cs`
+- Service: `Services/Interfaces/IProjectService.cs`, `Services/Implementations/ProjectService.cs`
+- Model: `Models/Project.cs`
 
-### Các file `.cs` theo thứ tự luồng
+### Luồng gọi class
 
-1. **`Controllers/DashboardController.cs`** — mọi action đều kiểm tra `project`/`group` thuộc `GetUserGroupIdsAsync`.
-2. **`Services/Interfaces/IDashboardService.cs`** — interface + view model.
-3. **`Services/Implementations/DashboardService.cs`** — đếm `JiraIssues`, `Commits`, `ContributorStats`, `Tasks`, `GroupMembers`.
-4. **`Models/ProjectManagementContext.cs`** — truy vấn các `DbSet` tương ứng.
+`Views/Projects/*`
+-> `ProjectsController` (`Index`, `Create`, `Edit`, `Details`)
+-> `IProjectService`
+-> `ProjectService`
+-> `ProjectManagementContext`
 
----
+### Kết quả nghiệp vụ
 
-## 6. Reports – xem báo cáo theo dự án được phép
-
-### Vai trò & file chính
-
-| Lớp | File |
-|-----|------|
-| UI | `Views/Reports/Index.cshtml` |
-| Controller | `Controllers/ReportsController.cs` — inject **`ProjectManagementContext`** trực tiếp (không có `IReportService`) |
-| Phân quyền | `IGroupService` — `GetGroupIdsUserParticipatesInAsync` |
-| Entity | `Models/Report.cs`, `Models/Project.cs` |
-
-### Các file `.cs` theo thứ tự luồng
-
-1. **`Controllers/ReportsController.cs`** — `Index`: EF Core `Reports` + `Include(Project)` + filter `allowedProjectIds`.
-2. **`Services/Interfaces/IGroupService.cs`** → **`Services/Implementations/GroupService.cs`** — danh sách nhóm hợp lệ.
-3. **`Models/ProjectManagementContext.cs`** — `DbSet<Report>`, `DbSet<Project>`.
+- Quản lý vòng đời dự án.
+- Mỗi dự án liên kết 1 nhóm để kiểm soát quyền truy cập.
 
 ---
 
-## 7. SRS – xem requirement & sinh tài liệu Markdown
+## 3) Tích hợp Jira
 
-### Vai trò & file chính
+### File chính
 
-| Lớp | File |
-|-----|------|
-| UI | `Views/Srs/Index.cshtml`, `Views/Srs/Generate.cshtml`, `Views/Srs/ShowSrs.cshtml` |
-| Controller | `Controllers/SrsController.cs` — `Index`, `Generate`, `Download` |
-| Service | `Services/Interfaces/ISrsService.cs` → `Services/Implementations/SrsService.cs` |
-| Phụ trợ | `IGroupService` / `GroupService` |
-| Entity | `Project`, `Group`, `Lecturer`, `User`, `JiraIssue`, `Task` |
+- Controller: `Controllers/ProjectsController.cs` (`ConnectJira`, `SyncJira`)
+- Service: `Services/Interfaces/IIntegrationSyncService.cs`, `Services/Implementations/IntegrationSyncService.cs`
+- Config: `Configuration/IntegrationOptions.cs`, `appsettings*.json` (`Jira`)
+- Model: `Models/ApiIntegration.cs`, `Models/JiraIssue.cs`
 
-### Các file `.cs` theo thứ tự luồng
+### Luồng gọi class
 
-1. **`Controllers/SrsController.cs`** — query `Projects`/`JiraIssues` (một số action), gọi `ISrsService.GenerateSrsContentAsync`, trả `FileResult` khi download.
-2. **`Services/Interfaces/ISrsService.cs`** — `GenerateSrsContentAsync`.
-3. **`Services/Implementations/SrsService.cs`** — build chuỗi Markdown từ dữ liệu EF.
-4. **`Models/ProjectManagementContext.cs`** — Include `Group`, `Lecturer`, `User`, `JiraIssues`, `Tasks`.
+`Views/Projects/ConnectJira.cshtml`
+-> `ProjectsController.ConnectJira` (lưu project key + token)
+-> `ProjectService.SaveApiIntegrationAsync`
 
----
+`ProjectsController.SyncJira`
+-> `IIntegrationSyncService.SyncJiraIssuesAsync`
+-> `IntegrationSyncService` gọi Jira API (`/rest/api/3/search/jql`)
+-> upsert `jira_issues`
 
-## Sơ đồ tổng hợp (layer – không login)
+### Ghi chú kỹ thuật
 
-```text
-Views (*.cshtml)
-    → Controllers/ProjectsController.cs | TasksController.cs | DashboardController.cs
-      | ReportsController.cs | SrsController.cs
-    → Services/Implementations/*Service.cs (qua Interfaces)
-    → Models/ProjectManagementContext.cs
-    → SQL Server
-```
-
-**Luồng chéo nhóm:** `IGroupService` / `GroupService.cs` được gọi từ hầu hết controller trên (`GetGroupIdsUserParticipatesInAsync`, `GetAllAsync`, `GetMembersAsync` trong Task).
-
-**Đồng bộ ngoài:** `IntegrationSyncService.cs` nối **Jira Cloud** và **GitHub API** (đăng ký trong `Program.cs`).
+- Đã cập nhật endpoint Jira mới tương thích Cloud.
+- Có hỗ trợ auto-sync khi app khởi động (xem `IntegrationAutoSyncHostedService`).
 
 ---
 
-## Gợi ý slide (mỗi người 1 chủ đề) — gắn file .cs
+## 4) Tích hợp GitHub
 
-1. **Jira:** `ProjectsController.cs` → `ProjectService.cs` + `IntegrationSyncService.cs` → `JiraIssue` / `ProjectManagementContext.cs`.
-2. **GitHub:** `ProjectsController.cs` → `ProjectService.cs` + `GitHubRepoParser.cs` + `IntegrationSyncService.cs` → `Repository` / `Commit`.
-3. **Task xem:** `TasksController.cs` → `TaskService.cs` + `GroupService.cs`.
-4. **Task sửa:** `TasksController.cs` → `TaskService.cs` (`UpdateStatusAsync`, …).
-5. **Dashboard:** `DashboardController.cs` → `DashboardService.cs` + `IDashboardService.cs` (VM).
-6. **Reports:** `ReportsController.cs` + `ProjectManagementContext.cs` + `GroupService.cs`.
-7. **SRS:** `SrsController.cs` → `SrsService.cs`.
+### File chính
+
+- Controller: `Controllers/ProjectsController.cs` (`ConnectGitHub`, `SyncGitHub`)
+- Service: `Services/Implementations/IntegrationSyncService.cs`
+- Helper: `Services/Implementations/GitHubRepoParser.cs`
+- Config: `Configuration/IntegrationOptions.cs`, `appsettings*.json` (`GitHub`)
+- Model: `Models/Repository.cs`, `Models/Commit.cs`, `Models/ApiIntegration.cs`
+
+### Luồng gọi class
+
+`Views/Projects/ConnectGitHub.cshtml`
+-> `ProjectsController.ConnectGitHub` (lưu token + repo URL)
+-> `ProjectService.SaveApiIntegrationAsync` + `UpsertGitHubRepositoryAsync`
+
+`ProjectsController.SyncGitHub`
+-> `IIntegrationSyncService.SyncGitHubCommitsAsync`
+-> `IntegrationSyncService` gọi GitHub API (`repos/{owner}/{repo}/commits`)
+-> upsert `commits`
+
+### Ghi chú kỹ thuật
+
+- Có cơ chế fallback khi token lỗi mà repo public.
+- Có tùy chọn ưu tiên repo cấu hình (`PreferConfiguredRepoUrl`).
 
 ---
 
-## Phụ lục: file `.cs` không thuộc 7 chủ đề nhưng cần biết
+## 5) Task
 
-| File | Ghi chú |
-|------|---------|
-| `Controllers/AccountController.cs` | Login/Register (ngoài phạm vi 7 chức năng) |
-| `Controllers/GroupsController.cs` | Quản lý nhóm (ngoài phạm vi chủ đề chính theo nhóm bạn) |
-| `Controllers/HomeController.cs` | Trang chủ |
-| `Services/AuthService.cs` + `IAuthService.cs` | Xác thực |
-| `Program.cs` | **Luôn nhắc** khi nói DI và tích hợp HTTP |
+### File chính
+
+- Controller: `Controllers/TasksController.cs`
+- Service: `Services/Interfaces/ITaskService.cs`, `Services/Implementations/TaskService.cs`
+- Model: `Models/Task.cs`, `Models/JiraIssue.cs`
+
+### Luồng gọi class
+
+`Views/Tasks/Create.cshtml`, `Assign.cshtml`, `Index.cshtml`
+-> `TasksController` (`Create`, `Assign`, `UpdateStatus`, `GetIssues`)
+-> `ITaskService` + `IProjectService` + `IGroupService`
+-> `TaskService`
+-> `ProjectManagementContext`
+
+### Kết quả nghiệp vụ
+
+- Tạo task từ Jira issue hoặc thủ công.
+- Giao việc và cập nhật trạng thái theo phân quyền.
 
 ---
 
-*Tài liệu cập nhật theo codebase SWD1813 (có `IntegrationSyncService`, `GitHubRepoParser`, `Configuration/IntegrationOptions`).*
+## 6) Chat realtime (SignalR)
+
+### File chính
+
+- Hub: `Hubs/ProjectChatHub.cs`
+- Controller: `Controllers/ChatController.cs`
+- Service: `Services/Interfaces/IChatService.cs`, `Services/Implementations/ChatService.cs`
+- View chính: `Views/Chat/Index.cshtml`, `Views/Chat/Project.cshtml`
+- Widget: `ViewComponents/ChatWidgetViewComponent.cs`, `Views/Shared/Components/ChatWidget/Default.cshtml`
+- Model: `Models/ChatMessage.cs`
+
+### Luồng gọi class
+
+`Chat UI / Widget`
+-> SignalR `ProjectChatHub` (`JoinTeamChat`, `SendTeamChat`, `JoinPublicChat`, `SendPublicChat`)
+-> `IChatService`
+-> `ChatService`
+-> `ProjectManagementContext`
+
+### Mô hình chat hiện tại
+
+- **Private theo Team (GroupId)**: chỉ thành viên nhóm thấy nội dung.
+- **Public cộng đồng**: mọi user đăng nhập có thể tham gia.
+- Lịch sử chat lấy qua `ChatController.TeamMessagesJson` / `PublicMessagesJson`.
+
+---
+
+## 7) SRS & Reports
+
+### File chính
+
+- SRS Controller: `Controllers/SrsController.cs`
+- Reports Controller: `Controllers/ReportsController.cs`
+- Service: `Services/Interfaces/ISrsService.cs`, `IReportService.cs`, `IReportContentService.cs`
+- Service impl: `SrsService.cs`, `ReportService.cs`, `ReportContentService.cs`
+- View: `Views/Srs/*`, `Views/Reports/Index.cshtml`
+- ViewModel: `Models/ViewModels/ReportsIndexVm.cs`
+
+### Luồng gọi class
+
+`Views/Srs/Generate`
+-> `SrsController.Generate`
+-> `ISrsService.GenerateSrsContentAsync`
+-> render `ShowSrs`
+
+`SrsController.Download` hoặc `SaveToReportList`
+-> `IReportService.RecordAsync` (ghi log báo cáo)
+
+`Views/Reports/Index`
+-> `ReportsController.Index`
+-> `IReportService.GetIndexAsync`
+-> hiển thị danh sách báo cáo theo quyền nhóm
+
+### Kết quả nghiệp vụ
+
+- Sinh tài liệu SRS markdown.
+- Tạo/tải báo cáo và quản lý lịch sử báo cáo theo dự án.
+
+---
+
+## III. Auto-sync khi chạy localhost
+
+Đang có sẵn:
+
+- `Services/Implementations/IntegrationAutoSyncHostedService.cs`
+- Cấu hình trong `appsettings.Development.json`:
+  - `IntegrationAutoSync.Enabled`
+  - `StartupDelaySeconds`
+  - `SyncJira`, `SyncGitHub`
+
+Luồng:
+
+`App start`
+-> `IntegrationAutoSyncHostedService`
+-> duyệt project có token/cấu hình
+-> gọi `IntegrationSyncService.SyncJiraIssuesAsync` và `SyncGitHubCommitsAsync`.
+
+---
+
+## IV. Phân công 7 người (đề xuất)
+
+| Người | Luồng |
+|------|------|
+| 1 | Quản lý nhóm |
+| 2 | Quản lý dự án |
+| 3 | Tích hợp Jira |
+| 4 | Tích hợp GitHub |
+| 5 | Task |
+| 6 | Chat realtime |
+| 7 | SRS & Reports |
+
+---
+
+## V. Kết luận
+
+- Tài liệu đã chuẩn hóa theo **7 luồng chính**.
+- Có đầy đủ luồng **Chat realtime** (private + public).
+- Mỗi luồng đều nêu rõ `View -> Controller -> Service -> DbContext`.

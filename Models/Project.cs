@@ -30,4 +30,6 @@ public partial class Project
     public virtual ICollection<Repository> Repositories { get; set; } = new List<Repository>();
 
     public virtual ICollection<Sprint> Sprints { get; set; } = new List<Sprint>();
+
+    public virtual ICollection<ChatMessage> ChatMessages { get; set; } = new List<ChatMessage>();
 }

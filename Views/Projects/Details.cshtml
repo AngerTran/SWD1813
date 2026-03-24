@@ -33,6 +33,8 @@
     <a asp-action="JiraIssues" asp-route-id="@Model.ProjectId" class="btn btn-success btn-sm" title="Danh sách issue trong DB (đồng bộ sau Connect Jira)">Xem danh sách issue Jira</a>
     <a asp-action="ConnectGitHub" asp-route-id="@Model.ProjectId" class="btn btn-primary btn-sm">Connect GitHub</a>
     <a asp-action="GitHubCommits" asp-route-id="@Model.ProjectId" class="btn btn-success btn-sm" title="Commit trong DB + % đóng góp (sau Connect &amp; đồng bộ)">Xem commit &amp; đóng góp GitHub</a>
+    <a asp-controller="Chat" asp-action="Project" asp-route-id="@Model.ProjectId" class="btn btn-info btn-sm text-white" title="Chat realtime SignalR theo dự án">Chat dự án (realtime)</a>
+    <a asp-controller="Srs" asp-action="Generate" asp-route-projectId="@Model.ProjectId" class="btn btn-warning btn-sm" title="Tạo SRS / ghi nhận báo cáo">SRS &amp; báo cáo</a>
     <form asp-action="SyncJira" asp-route-id="@Model.ProjectId" method="post" class="d-inline">
         <button type="submit" class="btn btn-outline-primary btn-sm">Đồng bộ Jira</button>
     </form>

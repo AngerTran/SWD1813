@@ -6,8 +6,22 @@
 }
 
 <h2 class="page-title">Tài liệu SRS – @projectName</h2>
-<div class="mb-3">
+@if (TempData["ReportSaved"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        Đã ghi nhận báo cáo vào trang <a asp-controller="Reports" asp-action="Index">Reports</a>.
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+<div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
     <a asp-action="Download" asp-route-projectId="@projectId" class="btn btn-primary">Tải xuống (.md)</a>
+    @if (!string.IsNullOrEmpty(projectId))
+    {
+        <form asp-controller="Srs" asp-action="SaveToReportList" method="post" class="d-inline">
+            <input type="hidden" name="projectId" value="@projectId" />
+            <button type="submit" class="btn btn-outline-primary">Ghi nhận vào danh sách Reports</button>
+        </form>
+    }
     <a asp-action="Generate" class="btn btn-secondary">Chọn dự án khác</a>
     <a asp-action="Index" class="btn btn-outline-secondary">Quay lại Requirements</a>
 </div>

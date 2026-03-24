@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace SWD1813.Models;
@@ -26,4 +26,6 @@ public partial class User
     public virtual ICollection<Report> Reports { get; set; } = new List<Report>();
 
     public virtual ICollection<Task> Tasks { get; set; } = new List<Task>();
+
+    public virtual ICollection<ChatMessage> ChatMessages { get; set; } = new List<ChatMessage>();
 }

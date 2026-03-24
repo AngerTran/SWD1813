@@ -1,0 +1,236 @@
+@model SWD1813.Models.ViewModels.ChatWidgetVm
+
+<div id="swdChatWidget" class="swd-chat-widget" data-user-id="@Model.CurrentUserId" data-has-team="@(Model.Teams.Count > 0 ? "1" : "0")">
+    <div id="swdChatPanel" class="swd-chat-panel card border-0 shadow-lg">
+        <div class="card-header py-2 px-3 d-flex align-items-center gap-2 flex-wrap bg-primary text-white">
+            <label class="small mb-0 text-white-50">Kênh</label>
+            <select id="swdChatScope" class="form-select form-select-sm swd-chat-select" style="max-width: 130px;">
+                <option value="team">Nhóm (Private)</option>
+                <option value="public">Cộng đồng</option>
+            </select>
+            <select id="swdChatTeam" class="form-select form-select-sm flex-grow-1 swd-chat-select">
+                <option value="">— Chọn team —</option>
+                @foreach (var t in Model.Teams)
+                {
+                    <option value="@t.TeamId">@t.TeamName</option>
+                }
+            </select>
+            <button type="button" class="btn btn-sm btn-light py-0 px-2" id="swdChatMinimize" title="Thu nhỏ">✕</button>
+        </div>
+        <div class="card-body p-2 d-flex flex-column swd-chat-body">
+            <div id="swdChatErr" class="alert alert-danger py-1 px-2 small mb-2 d-none"></div>
+            <div id="swdChatMessages" class="swd-chat-messages small"></div>
+            <div class="d-flex gap-1 mt-2 pt-2 border-top">
+                <input type="text" id="swdChatInput" class="form-control form-control-sm" maxlength="2000" placeholder="Nhắn tin…" autocomplete="off" />
+                <button type="button" id="swdChatSend" class="btn btn-sm btn-primary px-2">Gửi</button>
+            </div>
+        </div>
+        <div class="card-footer py-1 px-2 bg-light small">
+            <a asp-controller="Chat" asp-action="Index">Phòng chat</a>
+            <span class="text-muted"> · </span>
+            <span id="swdChatConn" class="text-muted">…</span>
+        </div>
+    </div>
+    <button type="button" id="swdChatFab" class="swd-chat-fab" aria-label="Mở chat" title="Chat">💬</button>
+</div>
+
+<script>
+(function () {
+    var fab = document.getElementById('swdChatFab');
+    var panel = document.getElementById('swdChatPanel');
+    var wrap = document.getElementById('swdChatWidget');
+    var scopeSel = document.getElementById('swdChatScope');
+    var teamSel = document.getElementById('swdChatTeam');
+    var box = document.getElementById('swdChatMessages');
+    var inp = document.getElementById('swdChatInput');
+    var btnSend = document.getElementById('swdChatSend');
+    var btnMin = document.getElementById('swdChatMinimize');
+    var errEl = document.getElementById('swdChatErr');
+    var connEl = document.getElementById('swdChatConn');
+    var userId = wrap.getAttribute('data-user-id') || '';
+    var hasTeam = wrap.getAttribute('data-has-team') === '1';
+
+    function showErr(msg) {
+        errEl.textContent = msg || '';
+        errEl.classList.toggle('d-none', !msg);
+    }
+    function esc(s) {
+        if (!s) return '';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+    function fmtTime(iso) {
+        try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+    }
+    function appendBubble(dto, scroll) {
+        var mine = dto.userId === userId;
+        var row = document.createElement('div');
+        row.className = 'mb-1 ' + (mine ? 'text-end' : '');
+        row.innerHTML = '<div class="d-inline-block text-start p-2 rounded ' + (mine ? 'bg-primary text-white' : 'bg-light border') + '" style="max-width:92%;white-space:pre-wrap;word-break:break-word;">' +
+            '<div class="small ' + (mine ? 'text-white-50' : 'text-muted') + '">' + esc(dto.displayName) + ' · ' + esc(fmtTime(dto.sentAt)) + '</div>' +
+            '<div>' + esc(dto.content) + '</div></div>';
+        box.appendChild(row);
+        if (scroll) box.scrollTop = box.scrollHeight;
+    }
+    function clearBox() { box.innerHTML = ''; }
+
+    var conn = null;
+    var activeScope = null; // team|public
+    var activeTeamId = null;
+
+    panel.classList.add('swd-chat-panel--hidden');
+    connEl.textContent = 'Đóng';
+    if (!hasTeam) scopeSel.value = 'public';
+    toggleTeamSelect();
+
+    function toggleTeamSelect() {
+        var teamMode = scopeSel.value === 'team';
+        teamSel.disabled = !teamMode;
+        if (!hasTeam) {
+            scopeSel.value = 'public';
+            teamSel.disabled = true;
+        }
+    }
+
+    async function ensureConn() {
+        if (typeof signalR === 'undefined') {
+            connEl.textContent = 'Thiếu SignalR';
+            return null;
+        }
+        if (window.swdChatConnection && window.swdChatConnection.state === signalR.HubConnectionState.Connected) {
+            conn = window.swdChatConnection;
+            return conn;
+        }
+        conn = new signalR.HubConnectionBuilder()
+            .withUrl('/hubs/projectchat')
+            .withAutomaticReconnect()
+            .build();
+        conn.on('ReceiveChat', function (dto) { appendBubble(dto, true); });
+        conn.on('ReceivePublicChat', function (dto) {
+            if (activeScope === 'public') appendBubble(dto, true);
+        });
+        conn.on('ChatError', function (m) { showErr(m); });
+        conn.on('Joined', function () { showErr(''); connEl.textContent = 'Đã vào phòng'; });
+        conn.on('JoinedTeam', function () { showErr(''); connEl.textContent = 'Đã vào nhóm riêng'; });
+        conn.onreconnecting(function () { connEl.textContent = 'Kết nối lại…'; });
+        conn.onreconnected(function () {
+            connEl.textContent = 'Đã kết nối lại';
+            if (activeScope === 'team' && activeTeamId) conn.invoke('JoinTeamChat', activeTeamId).catch(function () { });
+            if (activeScope === 'public') conn.invoke('JoinPublicChat').catch(function () { });
+        });
+        await conn.start();
+        window.swdChatConnection = conn;
+        connEl.textContent = 'Sẵn sàng';
+        return conn;
+    }
+
+    async function leaveCurrent(c) {
+        if (!c || !activeScope) return;
+        try {
+            if (activeScope === 'team' && activeTeamId) await c.invoke('LeaveTeamChat', activeTeamId);
+            if (activeScope === 'public') await c.invoke('LeavePublicChat');
+        } catch (e) { }
+    }
+
+    async function switchChannel() {
+        showErr('');
+        toggleTeamSelect();
+        var c = await ensureConn();
+        if (!c) return;
+        await leaveCurrent(c);
+        clearBox();
+
+        var scope = scopeSel.value;
+        if (scope === 'team') {
+            var teamId = teamSel.value || null;
+            activeScope = 'team';
+            activeTeamId = teamId;
+            if (!teamId) {
+                connEl.textContent = 'Chọn team';
+                return;
+            }
+            try {
+                var res = await fetch('/Chat/TeamMessagesJson?teamId=' + encodeURIComponent(teamId), { credentials: 'same-origin' });
+                if (!res.ok) {
+                    showErr('Không tải tin (' + res.status + ')');
+                    return;
+                }
+                var arr = await res.json();
+                (arr || []).forEach(function (m) { appendBubble(m, false); });
+                box.scrollTop = box.scrollHeight;
+                await c.invoke('JoinTeamChat', teamId);
+            } catch (e) {
+                showErr('Lỗi: ' + (e.message || e));
+            }
+            return;
+        }
+
+        activeScope = 'public';
+        activeTeamId = null;
+        try {
+            var pubRes = await fetch('/Chat/PublicMessagesJson', { credentials: 'same-origin' });
+            if (!pubRes.ok) {
+                showErr('Không tải chat cộng đồng (' + pubRes.status + ')');
+                return;
+            }
+            var pubArr = await pubRes.json();
+            (pubArr || []).forEach(function (m) { appendBubble(m, false); });
+            box.scrollTop = box.scrollHeight;
+            await c.invoke('JoinPublicChat');
+            connEl.textContent = 'Đang ở chat cộng đồng';
+        } catch (e) {
+            showErr('Lỗi: ' + (e.message || e));
+        }
+    }
+
+    scopeSel.addEventListener('change', switchChannel);
+    teamSel.addEventListener('change', function () {
+        if (scopeSel.value === 'team') switchChannel();
+    });
+
+    async function send() {
+        var text = (inp.value || '').trim();
+        if (!text) return;
+        var c = await ensureConn();
+        if (!c) return;
+        try {
+            if (activeScope === 'team') {
+                if (!activeTeamId) return;
+                await c.invoke('SendTeamChat', activeTeamId, text);
+            } else if (activeScope === 'public') {
+                await c.invoke('SendPublicChat', text);
+            } else {
+                return;
+            }
+            inp.value = '';
+        } catch (e) {
+            showErr('Gửi lỗi: ' + (e.message || e));
+        }
+    }
+    btnSend.addEventListener('click', send);
+    inp.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); send(); }
+    });
+
+    fab.addEventListener('click', function () {
+        panel.classList.remove('swd-chat-panel--hidden');
+        fab.classList.add('swd-chat-fab--hidden');
+        if (scopeSel.value === 'team' && !teamSel.value && teamSel.options.length > 1) {
+            teamSel.selectedIndex = 1;
+        }
+        switchChannel();
+    });
+    btnMin.addEventListener('click', function () {
+        panel.classList.add('swd-chat-panel--hidden');
+        fab.classList.remove('swd-chat-fab--hidden');
+        if (conn) leaveCurrent(conn);
+        activeScope = null;
+        activeTeamId = null;
+        clearBox();
+        showErr('');
+        if (teamSel.options.length > 0) teamSel.selectedIndex = 0;
+        connEl.textContent = 'Đóng';
+    });
+})();
+</script>

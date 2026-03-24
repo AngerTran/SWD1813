@@ -56,7 +56,9 @@ public class IntegrationSyncService : IIntegrationSyncService
             .FirstOrDefaultAsync(a => a.ProjectId == projectId, cancellationToken);
         var jiraToken = integration?.JiraToken?.Trim();
         if (string.IsNullOrWhiteSpace(jiraToken))
-            return (0, "Chưa lưu Jira API Token (Connect Jira).");
+            jiraToken = _jiraOptions.ApiToken?.Trim();
+        if (string.IsNullOrWhiteSpace(jiraToken))
+            return (0, "Chưa lưu Jira API Token (Connect Jira) hoặc Jira:ApiToken (user-secrets / env).");
 
         var baseUrl = (_jiraOptions.BaseUrl ?? "").Trim().TrimEnd('/');
         var email = (_jiraOptions.Email ?? "").Trim();
@@ -82,21 +84,9 @@ public class IntegrationSyncService : IIntegrationSyncService
         {
             for (var page = 0; page < maxPages; page++)
             {
-                // Jira Cloud đã ngừng GET /rest/api/3/search (410 Gone) — bắt buộc POST + JSON.
-                var payload = new
-                {
-                    jql,
-                    startAt,
-                    maxResults,
-                    fields = new[]
-                    {
-                        "summary", "description", "issuetype", "priority", "status", "assignee", "created",
-                        "updated"
-                    }
-                };
-                var json = JsonSerializer.Serialize(payload, JiraSearchBodyJson);
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                using var response = await client.PostAsync("rest/api/3/search", content, cancellationToken);
+                // Jira Cloud mới: gọi GET /rest/api/3/search/jql với query params.
+                var path = BuildJiraSearchJqlPath(jql, startAt, maxResults);
+                using var response = await client.GetAsync(path, cancellationToken);
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
@@ -104,7 +94,9 @@ public class IntegrationSyncService : IIntegrationSyncService
                     _logger.LogWarning("Jira API {Status}: {Body}", response.StatusCode, body.Length > 500 ? body[..500] : body);
                     var hint = response.StatusCode == System.Net.HttpStatusCode.Unauthorized
                         ? " Kiểm tra Jira:Email trong appsettings.json phải trùng tài khoản đã tạo API token."
-                        : "";
+                        : response.StatusCode == System.Net.HttpStatusCode.Gone
+                            ? " Jira API endpoint cũ đã bị remove; hệ thống đã chuyển sang /search/jql."
+                            : "";
                     return (synced,
                         $"Jira API lỗi {(int)response.StatusCode}: {response.ReasonPhrase}.{hint} Kiểm tra token, email và project key (VD: KAN).");
                 }
@@ -248,31 +240,59 @@ public class IntegrationSyncService : IIntegrationSyncService
         return ok ? key : "\"" + key.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
     }
 
+    private static string BuildJiraSearchJqlPath(string jql, int startAt, int maxResults)
+    {
+        var fields = new[]
+        {
+            "summary", "description", "issuetype", "priority", "status", "assignee", "created", "updated"
+        };
+        var q = $"jql={Uri.EscapeDataString(jql)}&startAt={startAt}&maxResults={maxResults}";
+        foreach (var f in fields)
+            q += $"&fields={Uri.EscapeDataString(f)}";
+        return "rest/api/3/search/jql?" + q;
+    }
+
     public async Task<(int Count, string? Error)> SyncGitHubCommitsAsync(string projectId, CancellationToken cancellationToken = default)
     {
         var integration = await _context.ApiIntegrations.AsNoTracking()
             .FirstOrDefaultAsync(a => a.ProjectId == projectId, cancellationToken);
         var ghToken = integration?.GithubToken?.Trim();
-        if (string.IsNullOrWhiteSpace(ghToken))
-            return (0, "Chưa lưu GitHub Personal Access Token (Connect GitHub).");
 
         var repo = await _context.Repositories
             .FirstOrDefaultAsync(r => r.ProjectId == projectId, cancellationToken);
 
-        if (repo == null && !string.IsNullOrWhiteSpace(_githubOptions.RepoUrl) &&
-            GitHubRepoParser.TryParse(_githubOptions.RepoUrl, out var o0, out var r0))
+        string cfgOwner = "";
+        string cfgName = "";
+        var hasConfiguredRepo = !string.IsNullOrWhiteSpace(_githubOptions.RepoUrl) &&
+                                GitHubRepoParser.TryParse(_githubOptions.RepoUrl, out cfgOwner, out cfgName);
+
+        if (repo == null && hasConfiguredRepo)
         {
             repo = new Repository
             {
                 RepoId = Guid.NewGuid().ToString(),
                 ProjectId = projectId,
-                GithubOwner = o0,
-                RepoName = r0,
-                RepoUrl = $"https://github.com/{o0}/{r0}",
+                GithubOwner = cfgOwner,
+                RepoName = cfgName,
+                RepoUrl = $"https://github.com/{cfgOwner}/{cfgName}",
                 CreatedAt = DateTime.UtcNow
             };
             _context.Repositories.Add(repo);
             await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        if (repo != null && hasConfiguredRepo && _githubOptions.PreferConfiguredRepoUrl)
+        {
+            var desiredUrl = $"https://github.com/{cfgOwner}/{cfgName}";
+            if (!string.Equals(repo.RepoUrl, desiredUrl, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(repo.GithubOwner, cfgOwner, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(repo.RepoName, cfgName, StringComparison.OrdinalIgnoreCase))
+            {
+                repo.RepoUrl = desiredUrl;
+                repo.GithubOwner = cfgOwner;
+                repo.RepoName = cfgName;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
         }
 
         if (repo == null)
@@ -294,7 +314,8 @@ public class IntegrationSyncService : IIntegrationSyncService
         var apiBase = (_githubOptions.ApiBaseUrl ?? "https://api.github.com").Trim().TrimEnd('/');
         var client = _httpClientFactory.CreateClient("GitHub");
         client.BaseAddress = new Uri(apiBase + "/");
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ghToken);
+        if (!string.IsNullOrWhiteSpace(ghToken))
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ghToken);
         // User-Agent đã cấu hình trong Program.cs cho client tên "GitHub" — không thêm lần 2 (dễ lỗi 403).
         if (!client.DefaultRequestHeaders.Accept.Any(h => h.MediaType?.Contains("github", StringComparison.OrdinalIgnoreCase) == true))
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
@@ -309,10 +330,96 @@ public class IntegrationSyncService : IIntegrationSyncService
                 using var response = await client.GetAsync(path, cancellationToken);
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized &&
+                    !string.IsNullOrWhiteSpace(ghToken))
+                {
+                    // Token lỗi nhưng repo có thể public -> thử lại request không Authorization.
+                    var backupAuth = client.DefaultRequestHeaders.Authorization;
+                    client.DefaultRequestHeaders.Authorization = null;
+                    try
+                    {
+                        using var retry = await client.GetAsync(path, cancellationToken);
+                        var retryBody = await retry.Content.ReadAsStringAsync(cancellationToken);
+                        if (retry.IsSuccessStatusCode)
+                        {
+                            // reuse biến body/response semantics bằng parse nhánh riêng
+                            var commitsRetry = JsonSerializer.Deserialize<JsonElement>(retryBody, JsonRelaxed);
+                            if (commitsRetry.ValueKind != JsonValueKind.Array || commitsRetry.GetArrayLength() == 0)
+                                break;
+                            foreach (var c in commitsRetry.EnumerateArray())
+                            {
+                                var sha = c.TryGetProperty("sha", out var sh) ? sh.GetString() : null;
+                                if (string.IsNullOrEmpty(sha))
+                                    continue;
+
+                                string? message = null;
+                                string? authorName = null;
+                                string? authorEmail = null;
+                                DateTime? commitDate = null;
+
+                                if (c.TryGetProperty("commit", out var commitObj) && commitObj.ValueKind == JsonValueKind.Object)
+                                {
+                                    if (commitObj.TryGetProperty("message", out var msg) && msg.ValueKind == JsonValueKind.String)
+                                        message = msg.GetString();
+                                    if (commitObj.TryGetProperty("author", out var auth) && auth.ValueKind == JsonValueKind.Object)
+                                    {
+                                        if (auth.TryGetProperty("name", out var an) && an.ValueKind == JsonValueKind.String)
+                                            authorName = an.GetString();
+                                        if (auth.TryGetProperty("email", out var ae) && ae.ValueKind == JsonValueKind.String)
+                                            authorEmail = ae.GetString();
+                                        if (auth.TryGetProperty("date", out var ad) && ad.ValueKind == JsonValueKind.String &&
+                                            DateTime.TryParse(ad.GetString(), out var parsed))
+                                            commitDate = parsed.ToUniversalTime();
+                                    }
+                                }
+
+                                var existing = await _context.Commits.FindAsync(new object[] { sha }, cancellationToken);
+                                if (existing != null)
+                                {
+                                    existing.RepoId = repo.RepoId;
+                                    existing.Message = message;
+                                    existing.AuthorName = authorName;
+                                    existing.AuthorEmail = authorEmail;
+                                    existing.CommitDate = commitDate;
+                                }
+                                else
+                                {
+                                    _context.Commits.Add(new Commit
+                                    {
+                                        CommitId = sha,
+                                        RepoId = repo.RepoId,
+                                        Message = message,
+                                        AuthorName = authorName,
+                                        AuthorEmail = authorEmail,
+                                        CommitDate = commitDate
+                                    });
+                                }
+                                synced++;
+                            }
+
+                            await _context.SaveChangesAsync(cancellationToken);
+                            if (commitsRetry.GetArrayLength() < 100)
+                                break;
+                            continue;
+                        }
+
+                        // Retry vẫn fail -> trả lỗi theo response retry.
+                        _logger.LogWarning("GitHub API retry {Status}: {Body}", retry.StatusCode, retryBody.Length > 400 ? retryBody[..400] : retryBody);
+                        return (synced, $"GitHub API lỗi {(int)retry.StatusCode}: {retry.ReasonPhrase}. Kiểm tra token và quyền repo.");
+                    }
+                    finally
+                    {
+                        client.DefaultRequestHeaders.Authorization = backupAuth;
+                    }
+                }
+
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("GitHub API {Status}: {Body}", response.StatusCode, body.Length > 400 ? body[..400] : body);
-                    return (synced, $"GitHub API lỗi {(int)response.StatusCode}: {response.ReasonPhrase}. Kiểm tra token và quyền repo.");
+                    var hint = response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                        ? " Token có thể sai/hết hạn. Nếu repo public, có thể để trống token."
+                        : "";
+                    return (synced, $"GitHub API lỗi {(int)response.StatusCode}: {response.ReasonPhrase}.{hint} Kiểm tra owner/repo và quyền token.");
                 }
 
                 var commits = JsonSerializer.Deserialize<JsonElement>(body, JsonRelaxed);

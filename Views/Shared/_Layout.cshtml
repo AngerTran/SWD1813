@@ -30,9 +30,6 @@
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="Projects" asp-action="Index">Projects</a>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link" asp-controller="Demo" asp-action="GitHubCommitsMau" title="Trang mẫu commit + biểu đồ (không cần DB)">Demo commits</a>
-                            </li>
                             @* View Task: Lecturer, Leader, Member (Admin không có quyền theo ma trận) *@
                             @if (User.IsInRole("Lecturer") || User.IsInRole("LECTURER") || User.IsInRole("Leader") || User.IsInRole("LEADER") || User.IsInRole("Member") || User.IsInRole("MEMBER"))
                             {
@@ -95,6 +92,11 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@8.0.7/dist/browser/signalr.min.js" crossorigin="anonymous"></script>
+        @await Component.InvokeAsync("ChatWidget")
+    }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

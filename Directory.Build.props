@@ -1,0 +1,6 @@
+<Project>
+  <!-- Tránh glob **/*.cs nhặt nhầm file build trong thư mục artifacts (nếu có). -->
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildThisFileDirectory)artifacts\**\*</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>
