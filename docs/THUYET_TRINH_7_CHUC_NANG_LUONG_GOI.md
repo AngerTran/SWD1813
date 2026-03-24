@@ -1,4 +1,4 @@
-﻿# Bài thuyết trình – 7 luồng chính (SWD1813)
+# Bài thuyết trình – 7 luồng chính (SWD1813)
 
 Tài liệu này dùng để thuyết trình đúng **7 luồng chính** của hệ thống (không tính login/logout), trong đó có **Chat realtime**.
 
@@ -16,7 +16,7 @@ File trục chính:
 - `Models/ProjectManagementContext.cs`: DbContext + mapping entity.
 - `Services/Interfaces/*`: hợp đồng nghiệp vụ.
 - `Services/Implementations/*`: xử lý nghiệp vụ.
-- `Controllers/*`: điều phối request/response.
+- `Controllers/*`: điều phối request/response (dự án: `ProjectsController`; Jira/GitHub: tách riêng `JiraController`, `GitHubController`; lớp cơ sở `ProjectIntegrationControllerBase` kiểm tra quyền theo nhóm).
 
 ---
 
@@ -71,6 +71,8 @@ File trục chính:
 -> `ProjectService`
 -> `ProjectManagementContext`
 
+**Ghi chú:** Trang **Chi tiết dự án** (`Details`) hiển thị trạng thái tích hợp (token Jira/GitHub). Các nút **Connect / Sync / Xem issue / Xem commit** gọi sang `JiraController` hoặc `GitHubController` (URL dạng `/Jira/...`, `/GitHub/...`). URL cũ `/Projects/ConnectJira`… (GET) được **redirect 301** sang controller mới.
+
 ### Kết quả nghiệp vụ
 
 - Quản lý vòng đời dự án.
@@ -82,26 +84,32 @@ File trục chính:
 
 ### File chính
 
-- Controller: `Controllers/ProjectsController.cs` (`ConnectJira`, `SyncJira`)
+- Controller: `Controllers/JiraController.cs` (`ConnectJira`, `JiraIssues`, `SyncJira`)
+- Cơ sở: `Controllers/ProjectIntegrationControllerBase.cs` (kiểm tra user thuộc nhóm của dự án)
+- View: `Views/Jira/ConnectJira.cshtml`, `Views/Jira/JiraIssues.cshtml`
 - Service: `Services/Interfaces/IIntegrationSyncService.cs`, `Services/Implementations/IntegrationSyncService.cs`
-- Config: `Configuration/IntegrationOptions.cs`, `appsettings*.json` (`Jira`)
+- Config: `Configuration/IntegrationOptions.cs`, `appsettings*.json` (`Jira`: `BaseUrl`, `Email`, tùy chọn `ApiToken`)
 - Model: `Models/ApiIntegration.cs`, `Models/JiraIssue.cs`
 
 ### Luồng gọi class
 
-`Views/Projects/ConnectJira.cshtml`
--> `ProjectsController.ConnectJira` (lưu project key + token)
--> `ProjectService.SaveApiIntegrationAsync`
+`Views/Jira/ConnectJira.cshtml`
+-> `JiraController.ConnectJira` (GET/POST: lưu **Jira Project Key** + token vào DB qua `ProjectService`)
+-> `ProjectService.SetJiraProjectKeyAsync` / `SaveApiIntegrationAsync`
 
-`ProjectsController.SyncJira`
+`Views/Jira/JiraIssues.cshtml` + nút đồng bộ trên `Details`
+-> `JiraController.SyncJira` (POST)
 -> `IIntegrationSyncService.SyncJiraIssuesAsync`
--> `IntegrationSyncService` gọi Jira API (`/rest/api/3/search/jql`)
--> upsert `jira_issues`
+-> `IntegrationSyncService` gọi Jira API (`GET /rest/api/3/search/jql`)
+-> upsert bảng `jira_issues`
+
+Sau thao tác: redirect về `Projects/Details/{id}`.
 
 ### Ghi chú kỹ thuật
 
-- Đã cập nhật endpoint Jira mới tương thích Cloud.
-- Có hỗ trợ auto-sync khi app khởi động (xem `IntegrationAutoSyncHostedService`).
+- Endpoint Jira Cloud: **GET** `/rest/api/3/search/jql` (tương thích bản mới).
+- **Token:** ưu tiên token lưu trong DB (Connect Jira); nếu trống có thể dùng **`Jira:ApiToken`** qua **User Secrets** / biến môi trường `Jira__ApiToken` (không commit git) — xem `docs/JIRA_LOCAL_USER_SECRETS.md`.
+- **Auto-sync** khi app khởi động: `IntegrationAutoSyncHostedService` (project có **Jira Project Key** + token DB **hoặc** `ApiToken` global).
 
 ---
 
@@ -109,7 +117,9 @@ File trục chính:
 
 ### File chính
 
-- Controller: `Controllers/ProjectsController.cs` (`ConnectGitHub`, `SyncGitHub`)
+- Controller: `Controllers/GitHubController.cs` (`ConnectGitHub`, `GitHubCommits`, `SyncGitHub`)
+- Cơ sở: `Controllers/ProjectIntegrationControllerBase.cs`
+- View: `Views/GitHub/ConnectGitHub.cshtml`, `Views/GitHub/GitHubCommits.cshtml`
 - Service: `Services/Implementations/IntegrationSyncService.cs`
 - Helper: `Services/Implementations/GitHubRepoParser.cs`
 - Config: `Configuration/IntegrationOptions.cs`, `appsettings*.json` (`GitHub`)
@@ -117,19 +127,23 @@ File trục chính:
 
 ### Luồng gọi class
 
-`Views/Projects/ConnectGitHub.cshtml`
--> `ProjectsController.ConnectGitHub` (lưu token + repo URL)
+`Views/GitHub/ConnectGitHub.cshtml`
+-> `GitHubController.ConnectGitHub` (GET/POST)
+-> có thể chỉ lưu **URL repo**; **PAT** tùy chọn (repo **public** thường chỉ cần URL)
 -> `ProjectService.SaveApiIntegrationAsync` + `UpsertGitHubRepositoryAsync`
 
-`ProjectsController.SyncGitHub`
+`Views/GitHub/GitHubCommits.cshtml` + nút đồng bộ trên `Details`
+-> `GitHubController.SyncGitHub` (POST)
 -> `IIntegrationSyncService.SyncGitHubCommitsAsync`
 -> `IntegrationSyncService` gọi GitHub API (`repos/{owner}/{repo}/commits`)
--> upsert `commits`
+-> upsert bảng `commits`
+
+Sau thao tác Connect: redirect về `Projects/Details/{id}`.
 
 ### Ghi chú kỹ thuật
 
-- Có cơ chế fallback khi token lỗi mà repo public.
-- Có tùy chọn ưu tiên repo cấu hình (`PreferConfiguredRepoUrl`).
+- Fallback khi token lỗi / thiếu: thử gọi API **không Authorization** nếu repo public.
+- Tùy chọn ưu tiên repo trong config: `GitHub:PreferConfiguredRepoUrl` + `RepoUrl`.
 
 ---
 
@@ -221,17 +235,19 @@ File trục chính:
 Đang có sẵn:
 
 - `Services/Implementations/IntegrationAutoSyncHostedService.cs`
-- Cấu hình trong `appsettings.Development.json`:
+- Cấu hình trong `appsettings.Development.json` (và `appsettings.json`):
   - `IntegrationAutoSync.Enabled`
   - `StartupDelaySeconds`
   - `SyncJira`, `SyncGitHub`
+  - `MaxProjectsPerRun` (0 = không giới hạn)
 
 Luồng:
 
-`App start`
+`App start` (sau `StartupDelaySeconds`)
 -> `IntegrationAutoSyncHostedService`
--> duyệt project có token/cấu hình
--> gọi `IntegrationSyncService.SyncJiraIssuesAsync` và `SyncGitHubCommitsAsync`.
+-> **Jira:** mọi dự án đã có **Jira Project Key** và (token trong `api_integrations` **hoặc** `Jira:ApiToken` global)
+-> **GitHub:** project có `github_token` trong `api_integrations`
+-> gọi `IntegrationSyncService.SyncJiraIssuesAsync` / `SyncGitHubCommitsAsync`.
 
 ---
 
@@ -249,8 +265,18 @@ Luồng:
 
 ---
 
-## V. Kết luận
+## V. Script SQL (schema + dữ liệu mẫu) — tách file
+
+- **Schema đầy đủ (idempotent):** `Database/SWD1813_SQLServer_Full.sql` — sinh từ `dotnet ef migrations script 0 ... --idempotent`; chạy trên SQL Server để tạo toàn bộ bảng + `__EFMigrationsHistory`.
+- **Dữ liệu demo:** `Database/SWD1813_SeedData.sql` — user/nhóm/dự án/issue/task/commit/chat mẫu; chạy **sau** khi đã có schema.
+
+**Lưu ý hiển thị tiếng Việt:** các cột tên (`users.full_name`, `groups.group_name`, …) dùng **NVARCHAR** trong migration gần nhất; dữ liệu cũ lưu sai encoding có thể cần cập nhật lại sau khi migrate.
+
+---
+
+## VI. Kết luận
 
 - Tài liệu đã chuẩn hóa theo **7 luồng chính**.
 - Có đầy đủ luồng **Chat realtime** (private + public).
 - Mỗi luồng đều nêu rõ `View -> Controller -> Service -> DbContext`.
+- **Jira** và **GitHub** đã **tách controller** (`JiraController`, `GitHubController`) cho dễ thuyết trình và bảo trì; `ProjectsController` giữ CRUD + `Details` và redirect URL GET cũ.
