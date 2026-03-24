@@ -14,7 +14,7 @@
 
 @if (Model.JiraProjectKey != null && Model.JiraProjectKey.Contains('@'))
 {
-    <div class="alert alert-warning">Jira Project Key đang là <strong>email</strong> — sai. Vào <a asp-action="ConnectJira" asp-route-id="@Model.ProjectId">Connect Jira</a> và nhập key <strong>KAN</strong> (từ URL board Jira).</div>
+    <div class="alert alert-warning">Jira Project Key đang là <strong>email</strong> — sai. Vào <a asp-controller="Jira" asp-action="ConnectJira" asp-route-id="@Model.ProjectId">Connect Jira</a> và nhập key <strong>KAN</strong> (từ URL board Jira).</div>
 }
 
 <h2 class="page-title">@Model.ProjectName</h2>
@@ -24,21 +24,21 @@
         <p class="mb-1"><strong>Nhóm:</strong> @(Model.Group?.GroupName ?? "-")</p>
         <p class="mb-1"><strong>Giảng viên phụ trách:</strong> @(Model.Group?.Lecturer?.User?.FullName ?? "Chưa gán") @if (Model.Group?.Lecturer?.User?.Email != null) { <span class="text-muted">(@Model.Group.Lecturer.User.Email)</span> }</p>
         <p class="mb-1"><strong>Jira Project Key:</strong> @(Model.JiraProjectKey ?? "-")</p>
-        <p class="mb-1 small text-muted">Trạng thái tích hợp: Jira token @(ViewBag.HasJiraToken == true ? "đã lưu" : "chưa lưu") · GitHub token @(ViewBag.HasGithubToken == true ? "đã lưu" : "chưa lưu")</p>
+        <p class="mb-1 small text-muted">Trạng thái tích hợp: Jira @(ViewBag.HasJiraToken == true ? "đã cấu hình token (DB hoặc user-secrets)" : "chưa có token") · GitHub @(ViewBag.HasGithubToken == true ? "đã lưu PAT trong DB" : "chưa lưu PAT")</p>
         <p class="mb-0"><strong>Thời gian:</strong> @(Model.StartDate?.ToString("yyyy-MM-dd") ?? "-") → @(Model.EndDate?.ToString("yyyy-MM-dd") ?? "-")</p>
     </div>
 </div>
 <p class="d-flex flex-wrap gap-2 align-items-center">
-    <a asp-action="ConnectJira" asp-route-id="@Model.ProjectId" class="btn btn-primary btn-sm">Connect Jira</a>
-    <a asp-action="JiraIssues" asp-route-id="@Model.ProjectId" class="btn btn-success btn-sm" title="Danh sách issue trong DB (đồng bộ sau Connect Jira)">Xem danh sách issue Jira</a>
-    <a asp-action="ConnectGitHub" asp-route-id="@Model.ProjectId" class="btn btn-primary btn-sm">Connect GitHub</a>
-    <a asp-action="GitHubCommits" asp-route-id="@Model.ProjectId" class="btn btn-success btn-sm" title="Commit trong DB + % đóng góp (sau Connect &amp; đồng bộ)">Xem commit &amp; đóng góp GitHub</a>
+    <a asp-controller="Jira" asp-action="ConnectJira" asp-route-id="@Model.ProjectId" class="btn btn-primary btn-sm">Connect Jira</a>
+    <a asp-controller="Jira" asp-action="JiraIssues" asp-route-id="@Model.ProjectId" class="btn btn-success btn-sm" title="Danh sách issue trong DB (đồng bộ sau Connect Jira)">Xem danh sách issue Jira</a>
+    <a asp-controller="GitHub" asp-action="ConnectGitHub" asp-route-id="@Model.ProjectId" class="btn btn-primary btn-sm">Connect GitHub</a>
+    <a asp-controller="GitHub" asp-action="GitHubCommits" asp-route-id="@Model.ProjectId" class="btn btn-success btn-sm" title="Commit trong DB + % đóng góp (sau Connect &amp; đồng bộ)">Xem commit &amp; đóng góp GitHub</a>
     <a asp-controller="Chat" asp-action="Project" asp-route-id="@Model.ProjectId" class="btn btn-info btn-sm text-white" title="Chat realtime SignalR theo dự án">Chat dự án (realtime)</a>
     <a asp-controller="Srs" asp-action="Generate" asp-route-projectId="@Model.ProjectId" class="btn btn-warning btn-sm" title="Tạo SRS / ghi nhận báo cáo">SRS &amp; báo cáo</a>
-    <form asp-action="SyncJira" asp-route-id="@Model.ProjectId" method="post" class="d-inline">
+    <form asp-controller="Jira" asp-action="SyncJira" asp-route-id="@Model.ProjectId" method="post" class="d-inline">
         <button type="submit" class="btn btn-outline-primary btn-sm">Đồng bộ Jira</button>
     </form>
-    <form asp-action="SyncGitHub" asp-route-id="@Model.ProjectId" method="post" class="d-inline">
+    <form asp-controller="GitHub" asp-action="SyncGitHub" asp-route-id="@Model.ProjectId" method="post" class="d-inline">
         <button type="submit" class="btn btn-outline-primary btn-sm">Đồng bộ GitHub</button>
     </form>
     <a asp-action="Index" class="btn btn-secondary btn-sm">Quay lại</a>

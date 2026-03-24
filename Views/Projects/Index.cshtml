@@ -41,8 +41,8 @@
                 <td>
                     <a asp-action="Details" asp-route-id="@p.ProjectId">Details</a> |
                     <a asp-action="Edit" asp-route-id="@p.ProjectId">Edit</a> |
-                    <a asp-action="ConnectJira" asp-route-id="@p.ProjectId">Jira</a> |
-                    <a asp-action="ConnectGitHub" asp-route-id="@p.ProjectId">GitHub</a>
+                    <a asp-controller="Jira" asp-action="ConnectJira" asp-route-id="@p.ProjectId">Jira</a> |
+                    <a asp-controller="GitHub" asp-action="ConnectGitHub" asp-route-id="@p.ProjectId">GitHub</a>
                 </td>
             </tr>
         }

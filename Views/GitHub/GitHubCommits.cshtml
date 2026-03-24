@@ -10,9 +10,9 @@
 </p>
 
 <p class="mb-3 d-flex flex-wrap gap-2">
-    <a asp-action="Details" asp-route-id="@Model.ProjectId" class="btn btn-secondary btn-sm">← Quay lại chi tiết dự án</a>
-    <a asp-action="ConnectGitHub" asp-route-id="@Model.ProjectId" class="btn btn-outline-primary btn-sm">Connect GitHub</a>
-    <form asp-action="SyncGitHub" asp-route-id="@Model.ProjectId" method="post" class="d-inline">
+    <a asp-controller="Projects" asp-action="Details" asp-route-id="@Model.ProjectId" class="btn btn-secondary btn-sm">← Quay lại chi tiết dự án</a>
+    <a asp-controller="GitHub" asp-action="ConnectGitHub" asp-route-id="@Model.ProjectId" class="btn btn-outline-primary btn-sm">Connect GitHub</a>
+    <form asp-controller="GitHub" asp-action="SyncGitHub" asp-route-id="@Model.ProjectId" method="post" class="d-inline">
         <button type="submit" class="btn btn-outline-primary btn-sm">Đồng bộ lại từ GitHub</button>
     </form>
 </p>
@@ -20,7 +20,7 @@
 <h3 class="mt-4">Đóng góp theo tác giả</h3>
 @if (Model.TotalCommits == 0)
 {
-    <div class="alert alert-info">Chưa có commit. Cần <strong>Connect GitHub</strong> (URL repo + token) rồi <strong>Đồng bộ GitHub</strong>.</div>
+    <div class="alert alert-info">Chưa có commit. Cần <strong>Connect GitHub</strong> (URL repo; thêm PAT nếu repo private) rồi <strong>Đồng bộ GitHub</strong>.</div>
 }
 else
 {

@@ -216,19 +216,19 @@ sequenceDiagram
 sequenceDiagram
     actor User
     participant Browser
-    participant ProjectsController
+    participant JiraController
     participant ProjectService
     participant Database
     User->>Browser: Nhập Jira Project Key, Token, Submit
-    Browser->>ProjectsController: POST /Projects/ConnectJira
-    ProjectsController->>ProjectService: GetByIdAsync(projectId)
+    Browser->>JiraController: POST /Jira/ConnectJira
+    JiraController->>ProjectService: GetByIdAsync(projectId)
     ProjectService->>Database: Get Project
     Database-->>ProjectService: Project
-    ProjectsController->>ProjectsController: Check project.GroupId in groupIds
-    ProjectsController->>ProjectService: SetJiraProjectKeyAsync, SaveApiIntegrationAsync
+    JiraController->>JiraController: Check project.GroupId in groupIds
+    JiraController->>ProjectService: SetJiraProjectKeyAsync, SaveApiIntegrationAsync
     ProjectService->>Database: Update Project, Upsert ApiIntegration
     Database-->>ProjectService: OK
-    ProjectsController-->>Browser: Redirect /Projects/Details
+    JiraController-->>Browser: Redirect /Projects/Details
     Browser-->>User: Chi tiết dự án
                     </pre>
                 </div>
@@ -249,7 +249,7 @@ sequenceDiagram
                     <tr><td>5</td><td>Create Project</td><td>User</td><td>ProjectsController</td><td>GroupService, ProjectService</td></tr>
                     <tr><td>6</td><td>Create Task</td><td>Leader</td><td>TasksController</td><td>GroupService, TaskService</td></tr>
                     <tr><td>7</td><td>Update Task Status</td><td>Assignee</td><td>TasksController</td><td>TaskService</td></tr>
-                    <tr><td>8</td><td>Connect Jira</td><td>User</td><td>ProjectsController</td><td>ProjectService</td></tr>
+                    <tr><td>8</td><td>Connect Jira</td><td>User</td><td>JiraController</td><td>ProjectService</td></tr>
                 </tbody>
             </table>
         </div>

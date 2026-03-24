@@ -13,9 +13,9 @@
 </p>
 
 <p class="mb-3">
-    <a asp-action="Details" asp-route-id="@projectId" class="btn btn-secondary btn-sm">← Quay lại chi tiết dự án</a>
-    <a asp-action="ConnectJira" asp-route-id="@projectId" class="btn btn-outline-primary btn-sm">Connect Jira</a>
-    <form asp-action="SyncJira" asp-route-id="@projectId" method="post" class="d-inline">
+    <a asp-controller="Projects" asp-action="Details" asp-route-id="@projectId" class="btn btn-secondary btn-sm">← Quay lại chi tiết dự án</a>
+    <a asp-controller="Jira" asp-action="ConnectJira" asp-route-id="@projectId" class="btn btn-outline-primary btn-sm">Connect Jira</a>
+    <form asp-controller="Jira" asp-action="SyncJira" asp-route-id="@projectId" method="post" class="d-inline">
         <button type="submit" class="btn btn-outline-primary btn-sm">Đồng bộ lại từ Jira</button>
     </form>
 </p>
