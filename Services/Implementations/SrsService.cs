@@ -1,21 +1,30 @@
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Models;
+using SWD1813.Repositories;
 using SWD1813.Services.Interfaces;
+using TaskEntity = SWD1813.Models.Task;
 
 namespace SWD1813.Services.Implementations;
 
 public class SrsService : ISrsService
 {
-    private readonly ProjectManagementContext _context;
+    private readonly IRepository<Project> _projects;
+    private readonly IRepository<JiraIssue> _jiraIssues;
+    private readonly IRepository<TaskEntity> _tasks;
 
-    public SrsService(ProjectManagementContext context)
+    public SrsService(
+        IRepository<Project> projects,
+        IRepository<JiraIssue> jiraIssues,
+        IRepository<TaskEntity> tasks)
     {
-        _context = context;
+        _projects = projects;
+        _jiraIssues = jiraIssues;
+        _tasks = tasks;
     }
 
     public async System.Threading.Tasks.Task<string?> GenerateSrsContentAsync(string projectId, IReadOnlyList<string>? allowedGroupIds = null)
     {
-        var project = await _context.Projects
+        var project = await _projects.Query()
             .Include(p => p.Group)
             .ThenInclude(g => g!.Lecturer)
             .ThenInclude(l => l!.User)
@@ -25,11 +34,11 @@ public class SrsService : ISrsService
         if (allowedGroupIds != null && (project.GroupId == null || !allowedGroupIds.Contains(project.GroupId)))
             return null;
 
-        var issues = await _context.JiraIssues
+        var issues = await _jiraIssues.Query()
             .Where(j => j.ProjectId == projectId && (j.IssueType == "Story" || j.IssueType == "Epic" || j.IssueType == "Task"))
             .OrderBy(j => j.IssueKey)
             .ToListAsync();
-        var taskDict = await _context.Tasks
+        var taskDict = await _tasks.Query()
             .Where(t => t.IssueId != null && issues.Select(i => i.IssueId).Contains(t.IssueId))
             .Include(t => t.AssignedToNavigation)
             .ToDictionaryAsync(t => t.IssueId!, t => t);

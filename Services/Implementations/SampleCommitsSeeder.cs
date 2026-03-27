@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Models;
+using SWD1813.Repositories;
+using RepoEntity = SWD1813.Models.Repository;
 
 namespace SWD1813.Services.Implementations;
 
@@ -22,10 +24,14 @@ public static class SampleCommitsSeeder
         return new Guid(guidBytes).ToString();
     }
 
-    public static async System.Threading.Tasks.Task EnsureAsync(ProjectManagementContext context,
+    public static async System.Threading.Tasks.Task EnsureAsync(
+        IRepository<Project> projectsRepo,
+        IRepository<RepoEntity> repositoriesRepo,
+        IRepository<Commit> commitsRepo,
+        IUnitOfWork unitOfWork,
         CancellationToken cancellationToken = default)
     {
-        var projects = await context.Projects
+        var projects = await projectsRepo.Query()
             .OrderBy(p => p.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -33,12 +39,12 @@ public static class SampleCommitsSeeder
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var repo = await context.Repositories
+            var repo = await repositoriesRepo.Query()
                 .FirstOrDefaultAsync(r => r.ProjectId == project.ProjectId, cancellationToken);
 
             if (repo == null)
             {
-                repo = new Repository
+                repo = new RepoEntity
                 {
                     RepoId = DemoRepoIdForProject(project.ProjectId ?? ""),
                     ProjectId = project.ProjectId,
@@ -47,11 +53,11 @@ public static class SampleCommitsSeeder
                     GithubOwner = "AngerTran",
                     CreatedAt = DateTime.UtcNow
                 };
-                context.Repositories.Add(repo);
-                await context.SaveChangesAsync(cancellationToken);
+                repositoriesRepo.Add(repo);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
-            var hasCommits = await context.Commits
+            var hasCommits = await commitsRepo.Query()
                 .AnyAsync(c => c.RepoId == repo.RepoId, cancellationToken);
             if (hasCommits)
                 continue;
@@ -107,8 +113,8 @@ public static class SampleCommitsSeeder
                 });
             }
 
-            context.Commits.AddRange(commits);
-            await context.SaveChangesAsync(cancellationToken);
+            commitsRepo.AddRange(commits);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
         }
     }
 }

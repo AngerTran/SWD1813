@@ -1,5 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using SWD1813.Models;
+using SWD1813.Repositories;
 
 namespace SWD1813.Services.Implementations;
 
@@ -10,10 +9,10 @@ namespace SWD1813.Services.Implementations;
 public static class DatabaseSchemaEnsure
 {
     /// <summary>Tạo bảng chat_messages + FK nếu chưa có.</summary>
-    public static async System.Threading.Tasks.Task EnsureChatMessagesTableAsync(ProjectManagementContext db,
+    public static async System.Threading.Tasks.Task EnsureChatMessagesTableAsync(IUnitOfWork unitOfWork,
         CancellationToken cancellationToken = default)
     {
-        await db.Database.ExecuteSqlRawAsync(
+        await unitOfWork.ExecuteSqlRawAsync(
             """
             IF OBJECT_ID(N'[dbo].[chat_messages]', N'U') IS NULL
             BEGIN

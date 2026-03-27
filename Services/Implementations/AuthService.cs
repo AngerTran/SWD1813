@@ -1,24 +1,26 @@
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Models;
+using SWD1813.Repositories;
 using SWD1813.Services.Interfaces;
 
 namespace SWD1813.Services.Implementations;
 
 public class AuthService : IAuthService
 {
-    private readonly ProjectManagementContext _context;
+    private readonly IRepository<User> _users;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public AuthService(ProjectManagementContext context)
+    public AuthService(IRepository<User> users, IUnitOfWork unitOfWork)
     {
-        _context = context;
+        _users = users;
+        _unitOfWork = unitOfWork;
     }
 
     public async System.Threading.Tasks.Task<User?> ValidateUserAsync(string email, string password)
     {
         var emailNorm = (email ?? "").Trim();
         if (string.IsNullOrEmpty(emailNorm)) return null;
-        var user = await _context.Users
-            .AsNoTracking()
+        var user = await _users.QueryAsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == emailNorm);
         if (user == null || string.IsNullOrEmpty(user.PasswordHash)) return null;
 
@@ -35,7 +37,7 @@ public class AuthService : IAuthService
     public async System.Threading.Tasks.Task EnsureSeedAdminAsync()
     {
         // Seed 4 tài khoản mặc định (4 role) nếu chưa có user nào
-        if (await _context.Users.AnyAsync()) return;
+        if (await _users.Query().AnyAsync()) return;
 
         var defaultPassword = "hash123"; // Lưu dạng thường để đăng nhập nhanh (AuthService hỗ trợ so sánh trực tiếp)
         var now = DateTime.UtcNow;
@@ -49,8 +51,8 @@ public class AuthService : IAuthService
         };
 
         foreach (var u in users)
-            _context.Users.Add(u);
-        await _context.SaveChangesAsync();
+            _users.Add(u);
+        await _unitOfWork.SaveChangesAsync();
     }
 
     private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
@@ -69,7 +71,7 @@ public class AuthService : IAuthService
         if (string.IsNullOrWhiteSpace(email))
             return (null, "Email là bắt buộc.");
 
-        if (await _context.Users.AnyAsync(u => u.Email == email))
+        if (await _users.Query().AnyAsync(u => u.Email == email))
             return (null, "Email này đã được sử dụng. Vui lòng dùng email khác hoặc đăng nhập.");
 
         var fullName = model.FullName?.Trim() ?? "";
@@ -87,8 +89,8 @@ public class AuthService : IAuthService
             Role = roleForDb,
             CreatedAt = DateTime.UtcNow
         };
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        _users.Add(user);
+        await _unitOfWork.SaveChangesAsync();
         return (user, null);
     }
 }

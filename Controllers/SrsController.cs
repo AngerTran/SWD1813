@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Models;
+using SWD1813.Repositories;
 using SWD1813.Services.Interfaces;
 
 namespace SWD1813.Controllers;
@@ -10,15 +11,21 @@ namespace SWD1813.Controllers;
 [Authorize]
 public class SrsController : Controller
 {
-    private readonly ProjectManagementContext _context;
+    private readonly IRepository<Project> _projects;
+    private readonly IRepository<JiraIssue> _jiraIssues;
     private readonly IGroupService _groupService;
     private readonly ISrsService _srsService;
     private readonly IReportService _reportService;
 
-    public SrsController(ProjectManagementContext context, IGroupService groupService, ISrsService srsService,
+    public SrsController(
+        IRepository<Project> projects,
+        IRepository<JiraIssue> jiraIssues,
+        IGroupService groupService,
+        ISrsService srsService,
         IReportService reportService)
     {
-        _context = context;
+        _projects = projects;
+        _jiraIssues = jiraIssues;
         _groupService = groupService;
         _srsService = srsService;
         _reportService = reportService;
@@ -30,13 +37,13 @@ public class SrsController : Controller
     public async Task<IActionResult> Index(string? projectId)
     {
         var groupIds = await _groupService.GetGroupIdsUserParticipatesInAsync(CurrentUserId, CurrentUserRole);
-        var allProjects = await _context.Projects.Include(p => p.JiraIssues).OrderBy(p => p.ProjectName).ToListAsync();
+        var allProjects = await _projects.Query().Include(p => p.JiraIssues).OrderBy(p => p.ProjectName).ToListAsync();
         var projects = allProjects.Where(p => p.GroupId != null && groupIds.Contains(p.GroupId)).ToList();
         ViewBag.Projects = projects;
         ViewBag.SelectedProjectId = projectId;
         if (!string.IsNullOrEmpty(projectId) && projects.Any(p => p.ProjectId == projectId))
         {
-            var issues = await _context.JiraIssues
+            var issues = await _jiraIssues.Query()
                 .Where(j => j.ProjectId == projectId && (j.IssueType == "Story" || j.IssueType == "Epic" || j.IssueType == "Task"))
                 .OrderBy(j => j.IssueKey)
                 .ToListAsync();
@@ -53,7 +60,7 @@ public class SrsController : Controller
     public async Task<IActionResult> Generate(string? projectId)
     {
         var groupIds = await _groupService.GetGroupIdsUserParticipatesInAsync(CurrentUserId, CurrentUserRole);
-        var allProjects = await _context.Projects.Include(p => p.Group).OrderBy(p => p.ProjectName).ToListAsync();
+        var allProjects = await _projects.Query().Include(p => p.Group).OrderBy(p => p.ProjectName).ToListAsync();
         var projects = allProjects.Where(p => p.GroupId != null && groupIds.Contains(p.GroupId)).ToList();
         ViewBag.Projects = projects;
         ViewBag.SelectedProjectId = projectId;
@@ -98,7 +105,7 @@ public class SrsController : Controller
         var downloadUrl = Url.Action(nameof(Download), "Srs", new { projectId })
                           ?? $"/Srs/Download?projectId={Uri.EscapeDataString(projectId)}";
         await _reportService.RecordAsync(projectId, ReportTypes.SrsMarkdown, downloadUrl, CurrentUserId);
-        var project = await _context.Projects.FindAsync(projectId);
+        var project = await _projects.FindAsync([projectId]);
         var fileName = $"SRS_{project?.ProjectName?.Replace(" ", "_") ?? projectId}_{DateTime.Now:yyyyMMdd_HHmm}.md";
         var bytes = System.Text.Encoding.UTF8.GetBytes(content);
         return File(bytes, "text/markdown", fileName);

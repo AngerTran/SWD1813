@@ -5,13 +5,20 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SWD1813.Configuration;
 using SWD1813.Models;
+using SWD1813.Repositories;
 using SWD1813.Services.Interfaces;
+using RepoEntity = SWD1813.Models.Repository;
 
 namespace SWD1813.Services.Implementations;
 
 public class IntegrationSyncService : IIntegrationSyncService
 {
-    private readonly ProjectManagementContext _context;
+    private readonly IRepository<Project> _projects;
+    private readonly IRepository<ApiIntegration> _apiIntegrations;
+    private readonly IRepository<JiraIssue> _jiraIssues;
+    private readonly IRepository<RepoEntity> _repositories;
+    private readonly IRepository<Commit> _commits;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly JiraIntegrationOptions _jiraOptions;
     private readonly GitHubIntegrationOptions _githubOptions;
@@ -26,13 +33,23 @@ public class IntegrationSyncService : IIntegrationSyncService
     };
 
     public IntegrationSyncService(
-        ProjectManagementContext context,
+        IRepository<Project> projects,
+        IRepository<ApiIntegration> apiIntegrations,
+        IRepository<JiraIssue> jiraIssues,
+        IRepository<RepoEntity> repositories,
+        IRepository<Commit> commits,
+        IUnitOfWork unitOfWork,
         IHttpClientFactory httpClientFactory,
         IOptions<JiraIntegrationOptions> jiraOptions,
         IOptions<GitHubIntegrationOptions> githubOptions,
         ILogger<IntegrationSyncService> logger)
     {
-        _context = context;
+        _projects = projects;
+        _apiIntegrations = apiIntegrations;
+        _jiraIssues = jiraIssues;
+        _repositories = repositories;
+        _commits = commits;
+        _unitOfWork = unitOfWork;
         _httpClientFactory = httpClientFactory;
         _jiraOptions = jiraOptions.Value;
         _githubOptions = githubOptions.Value;
@@ -41,7 +58,7 @@ public class IntegrationSyncService : IIntegrationSyncService
 
     public async Task<(int Count, string? Error)> SyncJiraIssuesAsync(string projectId, CancellationToken cancellationToken = default)
     {
-        var project = await _context.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.ProjectId == projectId, cancellationToken);
+        var project = await _projects.QueryAsNoTracking().FirstOrDefaultAsync(p => p.ProjectId == projectId, cancellationToken);
         if (project == null)
             return (0, "Không tìm thấy dự án.");
 
@@ -52,7 +69,7 @@ public class IntegrationSyncService : IIntegrationSyncService
         if (jiraKey.Contains('@', StringComparison.Ordinal))
             return (0, "Jira Project Key không phải email. Dùng mã ngắn trong URL Jira (VD: KAN từ .../projects/KAN/...). Email đặt trong appsettings.json → Jira:Email.");
 
-        var integration = await _context.ApiIntegrations.AsNoTracking()
+        var integration = await _apiIntegrations.QueryAsNoTracking()
             .FirstOrDefaultAsync(a => a.ProjectId == projectId, cancellationToken);
         var jiraToken = integration?.JiraToken?.Trim();
         if (string.IsNullOrWhiteSpace(jiraToken))
@@ -113,7 +130,7 @@ public class IntegrationSyncService : IIntegrationSyncService
                 foreach (var issue in issues.EnumerateArray())
                     await UpsertJiraIssueFromJsonAsync(projectId, issue, cancellationToken);
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 synced += count;
                 startAt += maxResults;
 
@@ -166,7 +183,7 @@ public class IntegrationSyncService : IIntegrationSyncService
             DateTime.TryParse(up.GetString(), out var udt))
             updatedAt = udt.ToUniversalTime();
 
-        var existing = await _context.JiraIssues.FirstOrDefaultAsync(i => i.IssueId == jiraId, ct);
+        var existing = await _jiraIssues.Query().FirstOrDefaultAsync(i => i.IssueId == jiraId, ct);
         if (existing != null)
         {
             existing.ProjectId = projectId;
@@ -182,7 +199,7 @@ public class IntegrationSyncService : IIntegrationSyncService
         }
         else
         {
-            _context.JiraIssues.Add(new JiraIssue
+            _jiraIssues.Add(new JiraIssue
             {
                 IssueId = jiraId,
                 ProjectId = projectId,
@@ -254,11 +271,11 @@ public class IntegrationSyncService : IIntegrationSyncService
 
     public async Task<(int Count, string? Error)> SyncGitHubCommitsAsync(string projectId, CancellationToken cancellationToken = default)
     {
-        var integration = await _context.ApiIntegrations.AsNoTracking()
+        var integration = await _apiIntegrations.QueryAsNoTracking()
             .FirstOrDefaultAsync(a => a.ProjectId == projectId, cancellationToken);
         var ghToken = integration?.GithubToken?.Trim();
 
-        var repo = await _context.Repositories
+        var repo = await _repositories.Query()
             .FirstOrDefaultAsync(r => r.ProjectId == projectId, cancellationToken);
 
         string cfgOwner = "";
@@ -268,7 +285,7 @@ public class IntegrationSyncService : IIntegrationSyncService
 
         if (repo == null && hasConfiguredRepo)
         {
-            repo = new Repository
+            repo = new RepoEntity
             {
                 RepoId = Guid.NewGuid().ToString(),
                 ProjectId = projectId,
@@ -277,8 +294,8 @@ public class IntegrationSyncService : IIntegrationSyncService
                 RepoUrl = $"https://github.com/{cfgOwner}/{cfgName}",
                 CreatedAt = DateTime.UtcNow
             };
-            _context.Repositories.Add(repo);
-            await _context.SaveChangesAsync(cancellationToken);
+            _repositories.Add(repo);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
         if (repo != null && hasConfiguredRepo && _githubOptions.PreferConfiguredRepoUrl)
@@ -291,7 +308,7 @@ public class IntegrationSyncService : IIntegrationSyncService
                 repo.RepoUrl = desiredUrl;
                 repo.GithubOwner = cfgOwner;
                 repo.RepoName = cfgName;
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
         }
 
@@ -308,7 +325,7 @@ public class IntegrationSyncService : IIntegrationSyncService
             name = pn;
             repo.GithubOwner = owner;
             repo.RepoName = name;
-            await _context.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
         var apiBase = (_githubOptions.ApiBaseUrl ?? "https://api.github.com").Trim().TrimEnd('/');
@@ -373,7 +390,7 @@ public class IntegrationSyncService : IIntegrationSyncService
                                     }
                                 }
 
-                                var existing = await _context.Commits.FindAsync(new object[] { sha }, cancellationToken);
+                                var existing = await _commits.FindAsync([sha], cancellationToken);
                                 if (existing != null)
                                 {
                                     existing.RepoId = repo.RepoId;
@@ -384,7 +401,7 @@ public class IntegrationSyncService : IIntegrationSyncService
                                 }
                                 else
                                 {
-                                    _context.Commits.Add(new Commit
+                                    _commits.Add(new Commit
                                     {
                                         CommitId = sha,
                                         RepoId = repo.RepoId,
@@ -397,7 +414,7 @@ public class IntegrationSyncService : IIntegrationSyncService
                                 synced++;
                             }
 
-                            await _context.SaveChangesAsync(cancellationToken);
+                            await _unitOfWork.SaveChangesAsync(cancellationToken);
                             if (commitsRetry.GetArrayLength() < 100)
                                 break;
                             continue;
@@ -454,7 +471,7 @@ public class IntegrationSyncService : IIntegrationSyncService
                     }
 
                     // Chỉ dùng payload list commits (tránh N+1 request → rate limit GitHub). Stats có thể bổ sung sau.
-                    var existing = await _context.Commits.FindAsync(new object[] { sha }, cancellationToken);
+                    var existing = await _commits.FindAsync([sha], cancellationToken);
                     if (existing != null)
                     {
                         existing.RepoId = repo.RepoId;
@@ -465,7 +482,7 @@ public class IntegrationSyncService : IIntegrationSyncService
                     }
                     else
                     {
-                        _context.Commits.Add(new Commit
+                        _commits.Add(new Commit
                         {
                             CommitId = sha,
                             RepoId = repo.RepoId,
@@ -479,7 +496,7 @@ public class IntegrationSyncService : IIntegrationSyncService
                     synced++;
                 }
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 if (commits.GetArrayLength() < 100)
                     break;

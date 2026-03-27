@@ -1,25 +1,34 @@
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Models;
 using SWD1813.Models.ViewModels;
+using SWD1813.Repositories;
 using SWD1813.Services.Interfaces;
 
 namespace SWD1813.Services.Implementations;
 
 public class ReportService : IReportService
 {
-    private readonly ProjectManagementContext _context;
+    private readonly IRepository<Project> _projects;
+    private readonly IRepository<Report> _reports;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IGroupService _groupService;
 
-    public ReportService(ProjectManagementContext context, IGroupService groupService)
+    public ReportService(
+        IRepository<Project> projects,
+        IRepository<Report> reports,
+        IUnitOfWork unitOfWork,
+        IGroupService groupService)
     {
-        _context = context;
+        _projects = projects;
+        _reports = reports;
+        _unitOfWork = unitOfWork;
         _groupService = groupService;
     }
 
     public async Task<Report> RecordAsync(string projectId, string reportType, string? fileUrl, string userId,
         string? reportId = null, CancellationToken cancellationToken = default)
     {
-        var exists = await _context.Projects.AnyAsync(p => p.ProjectId == projectId, cancellationToken);
+        var exists = await _projects.Query().AnyAsync(p => p.ProjectId == projectId, cancellationToken);
         if (!exists)
             throw new InvalidOperationException("Project không tồn tại.");
 
@@ -32,8 +41,8 @@ public class ReportService : IReportService
             FileUrl = fileUrl,
             GeneratedAt = DateTime.UtcNow
         };
-        _context.Reports.Add(report);
-        await _context.SaveChangesAsync(cancellationToken);
+        _reports.Add(report);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
         return report;
     }
 
@@ -41,14 +50,14 @@ public class ReportService : IReportService
         CancellationToken cancellationToken = default)
     {
         var groupIds = await _groupService.GetGroupIdsUserParticipatesInAsync(userId, role);
-        var projects = await _context.Projects
+        var projects = await _projects.Query()
             .AsNoTracking()
             .Where(p => p.GroupId != null && groupIds.Contains(p.GroupId))
             .OrderBy(p => p.ProjectName)
             .ToListAsync(cancellationToken);
 
         var allowedProjectIds = projects.Select(p => p.ProjectId).ToList();
-        var q = _context.Reports
+        var q = _reports.Query()
             .Include(r => r.Project)
             .Where(r => r.ProjectId != null && allowedProjectIds.Contains(r.ProjectId));
 
@@ -70,20 +79,20 @@ public class ReportService : IReportService
     {
         if (string.IsNullOrEmpty(projectId) || string.IsNullOrEmpty(userId)) return false;
         var groupIds = await _groupService.GetGroupIdsUserParticipatesInAsync(userId, role);
-        return await _context.Projects.AnyAsync(p =>
+        return await _projects.Query().AnyAsync(p =>
             p.ProjectId == projectId && p.GroupId != null && groupIds.Contains(p.GroupId), cancellationToken);
     }
 
     public async Task<Report?> GetReportByIdAsync(string reportId, CancellationToken cancellationToken = default)
     {
-        return await _context.Reports.AsNoTracking()
+        return await _reports.QueryAsNoTracking()
             .FirstOrDefaultAsync(r => r.ReportId == reportId, cancellationToken);
     }
 
     public async Task<string?> GetProjectDisplayNameAsync(string projectId,
         CancellationToken cancellationToken = default)
     {
-        return await _context.Projects.AsNoTracking()
+        return await _projects.QueryAsNoTracking()
             .Where(p => p.ProjectId == projectId)
             .Select(p => p.ProjectName)
             .FirstOrDefaultAsync(cancellationToken);

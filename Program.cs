@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Configuration;
 using SWD1813.Models;
+using SWD1813.Repositories;
 using SWD1813.Hubs;
 using SWD1813.Services.Implementations;
 using SWD1813.Services.Interfaces;
@@ -18,6 +19,8 @@ namespace SWD1813
                 ?? builder.Configuration.GetConnectionString("MvcMovieContext");
             builder.Services.AddDbContext<ProjectManagementContext>(options =>
                 options.UseSqlServer(connectionString));
+            builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+            builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 
             builder.Services.Configure<JiraIntegrationOptions>(
                 builder.Configuration.GetSection(JiraIntegrationOptions.SectionName));
@@ -69,9 +72,13 @@ namespace SWD1813
             {
                 var auth = scope.ServiceProvider.GetRequiredService<IAuthService>();
                 await auth.EnsureSeedAdminAsync();
-                var db = scope.ServiceProvider.GetRequiredService<ProjectManagementContext>();
-                await DatabaseSchemaEnsure.EnsureChatMessagesTableAsync(db);
-                await SampleCommitsSeeder.EnsureAsync(db);
+                var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                await DatabaseSchemaEnsure.EnsureChatMessagesTableAsync(unitOfWork);
+                await SampleCommitsSeeder.EnsureAsync(
+                    scope.ServiceProvider.GetRequiredService<IRepository<Project>>(),
+                    scope.ServiceProvider.GetRequiredService<IRepository<Repository>>(),
+                    scope.ServiceProvider.GetRequiredService<IRepository<Commit>>(),
+                    unitOfWork);
             }
 
             if (!app.Environment.IsDevelopment())

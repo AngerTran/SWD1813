@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Models;
 using SWD1813.Models.ViewModels;
+using SWD1813.Repositories;
 using SWD1813.Services.Interfaces;
 
 namespace SWD1813.Services.Implementations;
@@ -9,12 +10,23 @@ public class ChatService : IChatService
 {
     public const int MaxContentLength = 2000;
 
-    private readonly ProjectManagementContext _context;
+    private readonly IRepository<Project> _projects;
+    private readonly IRepository<ChatMessage> _chatMessages;
+    private readonly IRepository<User> _users;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IGroupService _groupService;
 
-    public ChatService(ProjectManagementContext context, IGroupService groupService)
+    public ChatService(
+        IRepository<Project> projects,
+        IRepository<ChatMessage> chatMessages,
+        IRepository<User> users,
+        IUnitOfWork unitOfWork,
+        IGroupService groupService)
     {
-        _context = context;
+        _projects = projects;
+        _chatMessages = chatMessages;
+        _users = users;
+        _unitOfWork = unitOfWork;
         _groupService = groupService;
     }
 
@@ -29,7 +41,7 @@ public class ChatService : IChatService
     public async Task<string?> ResolveTeamIdByProjectAsync(string projectId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(projectId)) return null;
-        return await _context.Projects.AsNoTracking()
+        return await _projects.QueryAsNoTracking()
             .Where(p => p.ProjectId == projectId)
             .Select(p => p.GroupId)
             .FirstOrDefaultAsync(cancellationToken);
@@ -59,7 +71,7 @@ public class ChatService : IChatService
     public async Task<List<ChatMessageDto>> GetRecentPublicMessagesAsync(int take = 200,
         CancellationToken cancellationToken = default)
     {
-        var list = await _context.ChatMessages.AsNoTracking()
+        var list = await _chatMessages.QueryAsNoTracking()
             .Where(m => m.ProjectId == null)
             .Include(m => m.User)
             .OrderByDescending(m => m.SentAt)
@@ -77,7 +89,7 @@ public class ChatService : IChatService
         if (text.Length > MaxContentLength)
             text = text[..MaxContentLength];
 
-        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
+        var user = await _users.QueryAsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
         if (user == null) return null;
 
         var msg = new ChatMessage
@@ -88,8 +100,8 @@ public class ChatService : IChatService
             Content = text,
             SentAt = DateTime.UtcNow
         };
-        _context.ChatMessages.Add(msg);
-        await _context.SaveChangesAsync(cancellationToken);
+        _chatMessages.Add(msg);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new ChatMessageDto
         {
@@ -104,7 +116,7 @@ public class ChatService : IChatService
     public async Task<bool> UserCanAccessProjectAsync(string projectId, string? userId, string? role,
         CancellationToken cancellationToken = default)
     {
-        var project = await _context.Projects.AsNoTracking()
+        var project = await _projects.QueryAsNoTracking()
             .FirstOrDefaultAsync(p => p.ProjectId == projectId, cancellationToken);
         if (project?.GroupId == null) return false;
         var groupIds = await _groupService.GetGroupIdsUserParticipatesInAsync(userId, role);
@@ -114,7 +126,7 @@ public class ChatService : IChatService
     public async Task<List<ChatMessageDto>> GetRecentMessagesAsync(string projectId, int take = 200,
         CancellationToken cancellationToken = default)
     {
-        var list = await _context.ChatMessages.AsNoTracking()
+        var list = await _chatMessages.QueryAsNoTracking()
             .Where(m => m.ProjectId == projectId)
             .Include(m => m.User)
             .OrderByDescending(m => m.SentAt)
@@ -134,7 +146,7 @@ public class ChatService : IChatService
         if (text.Length > MaxContentLength)
             text = text[..MaxContentLength];
 
-        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
+        var user = await _users.QueryAsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
         if (user == null) return null;
 
         var msg = new ChatMessage
@@ -145,8 +157,8 @@ public class ChatService : IChatService
             Content = text,
             SentAt = DateTime.UtcNow
         };
-        _context.ChatMessages.Add(msg);
-        await _context.SaveChangesAsync(cancellationToken);
+        _chatMessages.Add(msg);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new ChatMessageDto
         {
@@ -178,7 +190,7 @@ public class ChatService : IChatService
     private async Task<string?> ResolveTeamAnchorProjectIdAsync(string teamId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(teamId)) return null;
-        return await _context.Projects.AsNoTracking()
+        return await _projects.QueryAsNoTracking()
             .Where(p => p.GroupId == teamId)
             .OrderBy(p => p.CreatedAt)
             .ThenBy(p => p.ProjectId)

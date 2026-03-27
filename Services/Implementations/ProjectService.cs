@@ -1,22 +1,40 @@
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Models;
 using SWD1813.Models.ViewModels;
+using SWD1813.Repositories;
 using SWD1813.Services.Interfaces;
+using RepoEntity = SWD1813.Models.Repository;
 
 namespace SWD1813.Services.Implementations;
 
 public class ProjectService : IProjectService
 {
-    private readonly ProjectManagementContext _context;
+    private readonly IRepository<Project> _projects;
+    private readonly IRepository<ApiIntegration> _apiIntegrations;
+    private readonly IRepository<JiraIssue> _jiraIssues;
+    private readonly IRepository<RepoEntity> _repositories;
+    private readonly IRepository<Commit> _commits;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public ProjectService(ProjectManagementContext context)
+    public ProjectService(
+        IRepository<Project> projects,
+        IRepository<ApiIntegration> apiIntegrations,
+        IRepository<JiraIssue> jiraIssues,
+        IRepository<RepoEntity> repositories,
+        IRepository<Commit> commits,
+        IUnitOfWork unitOfWork)
     {
-        _context = context;
+        _projects = projects;
+        _apiIntegrations = apiIntegrations;
+        _jiraIssues = jiraIssues;
+        _repositories = repositories;
+        _commits = commits;
+        _unitOfWork = unitOfWork;
     }
 
     public async System.Threading.Tasks.Task<List<Project>> GetAllAsync(string? groupId = null)
     {
-        var q = _context.Projects
+        var q = _projects.Query()
             .Include(p => p.Group)
             .AsQueryable();
         if (!string.IsNullOrEmpty(groupId))
@@ -26,7 +44,7 @@ public class ProjectService : IProjectService
 
     public async System.Threading.Tasks.Task<Project?> GetByIdAsync(string id)
     {
-        return await _context.Projects
+        return await _projects.Query()
             .Include(p => p.Group)
             .ThenInclude(g => g!.Lecturer)
             .ThenInclude(l => l!.User)
@@ -48,39 +66,39 @@ public class ProjectService : IProjectService
             EndDate = endDate,
             CreatedAt = DateTime.UtcNow
         };
-        _context.Projects.Add(project);
-        await _context.SaveChangesAsync();
+        _projects.Add(project);
+        await _unitOfWork.SaveChangesAsync();
         return project;
     }
 
     public async System.Threading.Tasks.Task<bool> UpdateAsync(string id, string projectName, DateOnly? startDate, DateOnly? endDate)
     {
-        var p = await _context.Projects.FindAsync(id);
+        var p = await _projects.FindAsync([id]);
         if (p == null) return false;
         p.ProjectName = projectName;
         p.StartDate = startDate;
         p.EndDate = endDate;
-        await _context.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync();
         return true;
     }
 
     public async System.Threading.Tasks.Task<bool> SetJiraProjectKeyAsync(string projectId, string jiraProjectKey)
     {
-        var p = await _context.Projects.FindAsync(projectId);
+        var p = await _projects.FindAsync([projectId]);
         if (p == null) return false;
         p.JiraProjectKey = jiraProjectKey;
-        await _context.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync();
         return true;
     }
 
     public async System.Threading.Tasks.Task<ApiIntegration?> GetApiIntegrationAsync(string projectId)
     {
-        return await _context.ApiIntegrations.FirstOrDefaultAsync(a => a.ProjectId == projectId);
+        return await _apiIntegrations.Query().FirstOrDefaultAsync(a => a.ProjectId == projectId);
     }
 
     public async System.Threading.Tasks.Task SaveApiIntegrationAsync(string projectId, string? jiraToken, string? githubToken)
     {
-        var existing = await _context.ApiIntegrations.FirstOrDefaultAsync(a => a.ProjectId == projectId);
+        var existing = await _apiIntegrations.Query().FirstOrDefaultAsync(a => a.ProjectId == projectId);
         if (existing != null)
         {
             // Chỉ cập nhật khi có giá trị thật — tránh ghi chuỗi rỗng làm mất token đã lưu.
@@ -89,7 +107,7 @@ public class ProjectService : IProjectService
         }
         else
         {
-            _context.ApiIntegrations.Add(new ApiIntegration
+            _apiIntegrations.Add(new ApiIntegration
             {
                 IntegrationId = Guid.NewGuid().ToString(),
                 ProjectId = projectId,
@@ -98,12 +116,12 @@ public class ProjectService : IProjectService
                 CreatedAt = DateTime.UtcNow
             });
         }
-        await _context.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync();
     }
 
     public async System.Threading.Tasks.Task<List<JiraIssue>> GetJiraIssuesByProjectAsync(string projectId)
     {
-        return await _context.JiraIssues
+        return await _jiraIssues.Query()
             .Where(i => i.ProjectId == projectId)
             .OrderBy(i => i.IssueKey)
             .ToListAsync();
@@ -113,13 +131,13 @@ public class ProjectService : IProjectService
     {
         if (string.IsNullOrWhiteSpace(githubRepoUrl))
             return false;
-        var p = await _context.Projects.FindAsync(projectId);
+        var p = await _projects.FindAsync([projectId]);
         if (p == null) return false;
         if (!GitHubRepoParser.TryParse(githubRepoUrl, out var owner, out var repoName))
             return false;
 
         var normalizedUrl = $"https://github.com/{owner}/{repoName}";
-        var existing = await _context.Repositories
+        var existing = await _repositories.Query()
             .FirstOrDefaultAsync(r => r.ProjectId == projectId);
         if (existing != null)
         {
@@ -129,7 +147,7 @@ public class ProjectService : IProjectService
         }
         else
         {
-            _context.Repositories.Add(new Repository
+            _repositories.Add(new RepoEntity
             {
                 RepoId = Guid.NewGuid().ToString(),
                 ProjectId = projectId,
@@ -140,16 +158,16 @@ public class ProjectService : IProjectService
             });
         }
 
-        await _context.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync();
         return true;
     }
 
     public async System.Threading.Tasks.Task<GitHubCommitsPageVm?> GetGitHubCommitsPageAsync(string projectId)
     {
-        var project = await _context.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.ProjectId == projectId);
+        var project = await _projects.QueryAsNoTracking().FirstOrDefaultAsync(p => p.ProjectId == projectId);
         if (project == null) return null;
 
-        var repoIds = await _context.Repositories.AsNoTracking()
+        var repoIds = await _repositories.QueryAsNoTracking()
             .Where(r => r.ProjectId == projectId)
             .Select(r => r.RepoId)
             .ToListAsync();
@@ -164,7 +182,7 @@ public class ProjectService : IProjectService
             };
         }
 
-        var commits = await _context.Commits.AsNoTracking()
+        var commits = await _commits.QueryAsNoTracking()
             .Where(c => c.RepoId != null && repoIds.Contains(c.RepoId))
             .Include(c => c.Repo)
             .OrderByDescending(c => c.CommitDate)

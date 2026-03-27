@@ -81,7 +81,7 @@ public class ChatController : Controller
         if (!await _chatService.UserCanAccessTeamAsync(teamId, CurrentUserId, CurrentUserRole))
             return Forbid();
 
-        var messages = await _chatService.GetRecentTeamMessagesAsync(teamId, 80);
+        var messages = await _chatService.GetRecentTeamMessagesAsync(teamId, 80);// 80 tin nhan gan nhat 
         return new JsonResult(messages, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SWD1813.Configuration;
 using SWD1813.Models;
+using SWD1813.Repositories;
 using SWD1813.Services.Interfaces;
 
 namespace SWD1813.Services.Implementations;
@@ -42,7 +43,8 @@ public class IntegrationAutoSyncHostedService : BackgroundService
                 await global::System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(_options.StartupDelaySeconds), stoppingToken);
 
             await using var scope = _scopeFactory.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<ProjectManagementContext>();
+            var projects = scope.ServiceProvider.GetRequiredService<IRepository<Project>>();
+            var apiIntegrations = scope.ServiceProvider.GetRequiredService<IRepository<ApiIntegration>>();
             var sync = scope.ServiceProvider.GetRequiredService<IIntegrationSyncService>();
 
             var projectIdSet = new HashSet<string>(StringComparer.Ordinal);
@@ -50,11 +52,11 @@ public class IntegrationAutoSyncHostedService : BackgroundService
             if (_options.SyncJira)
             {
                 var globalJiraToken = !string.IsNullOrWhiteSpace(_jiraOptions.ApiToken);
-                var withJiraKey = await db.Projects.AsNoTracking()
+                var withJiraKey = await projects.QueryAsNoTracking()
                     .Where(p => !string.IsNullOrWhiteSpace(p.JiraProjectKey))
                     .Select(p => p.ProjectId)
                     .ToListAsync(stoppingToken);
-                var dbJiraTokenIds = await db.ApiIntegrations.AsNoTracking()
+                var dbJiraTokenIds = await apiIntegrations.QueryAsNoTracking()
                     .Where(a => !string.IsNullOrWhiteSpace(a.JiraToken))
                     .Select(a => a.ProjectId!)
                     .ToListAsync(stoppingToken);
@@ -68,7 +70,7 @@ public class IntegrationAutoSyncHostedService : BackgroundService
 
             if (_options.SyncGitHub)
             {
-                var ghIds = await db.ApiIntegrations.AsNoTracking()
+                var ghIds = await apiIntegrations.QueryAsNoTracking()
                     .Where(a => !string.IsNullOrWhiteSpace(a.GithubToken))
                     .Select(a => a.ProjectId!)
                     .ToListAsync(stoppingToken);

@@ -1,25 +1,31 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using SWD1813.Models;
+using SWD1813.Repositories;
 using SWD1813.Services.Interfaces;
 
 namespace SWD1813.Services.Implementations;
 
 public class ReportContentService : IReportContentService
 {
-    private readonly ProjectManagementContext _context;
+    private readonly IRepository<Project> _projects;
+    private readonly IRepository<JiraIssue> _jiraIssues;
     private readonly IDashboardService _dashboard;
 
-    public ReportContentService(ProjectManagementContext context, IDashboardService dashboard)
+    public ReportContentService(
+        IRepository<Project> projects,
+        IRepository<JiraIssue> jiraIssues,
+        IDashboardService dashboard)
     {
-        _context = context;
+        _projects = projects;
+        _jiraIssues = jiraIssues;
         _dashboard = dashboard;
     }
 
     public async Task<string?> GenerateProjectSummaryMarkdownAsync(string projectId,
         CancellationToken cancellationToken = default)
     {
-        var p = await _context.Projects
+        var p = await _projects.Query()
             .AsNoTracking()
             .Include(x => x.Group)
             .ThenInclude(g => g!.Lecturer)
@@ -30,7 +36,7 @@ public class ReportContentService : IReportContentService
 
         var taskVm = await _dashboard.GetTaskCompletionAsync(projectId);
         var commitVm = await _dashboard.GetCommitStatsAsync(projectId);
-        var jiraTotal = await _context.JiraIssues.AsNoTracking().CountAsync(j => j.ProjectId == projectId, cancellationToken);
+        var jiraTotal = await _jiraIssues.QueryAsNoTracking().CountAsync(j => j.ProjectId == projectId, cancellationToken);
         var repoCount = p.Repositories?.Count ?? 0;
 
         var sb = new StringBuilder();
